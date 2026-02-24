@@ -21,11 +21,13 @@
 
 ## 控制脚本（直链）
 
-- [control.sh](./control.sh)
+- [control.sh](https://github.com/HlONGlin/subconvert-manager/blob/main/control.sh)
 
 通过该脚本可完成安装/更新、重启/停止、自动换端口、查看完整访问 URL（自动探测本机和公网 IP）。
 
 ---
+
+?????`https://github.com/HlONGlin/subconvert-manager`
 
 ## Linux 部署
 
@@ -33,7 +35,7 @@
 
 ```bash
 cd /opt
-git clone <your-repo-url> subconvert-manager
+git clone https://github.com/HlONGlin/subconvert-manager subconvert-manager
 cd subconvert-manager
 sudo bash control.sh
 ```
@@ -83,7 +85,7 @@ Windows 不使用 `control.sh`，建议两种方式：
 在 WSL 里按 Linux 步骤执行即可：
 
 ```bash
-git clone <your-repo-url> subconvert-manager
+git clone https://github.com/HlONGlin/subconvert-manager subconvert-manager
 cd subconvert-manager
 sudo bash control.sh
 ```
