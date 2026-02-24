@@ -5,6 +5,7 @@ IFS=$'\n\t'
 REPO_URL="${REPO_URL:-https://github.com/HlONGlin/subconvert-manager.git}"
 BRANCH="${BRANCH:-main}"
 APP_DIR="${APP_DIR:-/opt/subconvert-manager}"
+OPEN_CONTROL="${OPEN_CONTROL:-auto}"
 
 log() {
   printf '[%s] %s\n' "$(date '+%Y-%m-%d %H:%M:%S')" "$*"
@@ -13,6 +14,10 @@ log() {
 die() {
   printf '[%s] ERROR: %s\n' "$(date '+%Y-%m-%d %H:%M:%S')" "$*" >&2
   exit 1
+}
+
+warn() {
+  printf '[%s] WARN: %s\n' "$(date '+%Y-%m-%d %H:%M:%S')" "$*" >&2
 }
 
 has_cmd() {
@@ -78,6 +83,24 @@ sync_repo() {
   git clone --depth 1 -b "$BRANCH" "$REPO_URL" "$APP_DIR"
 }
 
+should_open_control() {
+  local v
+  v="$(printf '%s' "$OPEN_CONTROL" | tr '[:upper:]' '[:lower:]')"
+  case "$v" in
+    1|true|yes|on) return 0 ;;
+    0|false|no|off) return 1 ;;
+    auto|"")
+      [[ -t 0 && -t 1 ]]
+      return
+      ;;
+    *)
+      warn "Unknown OPEN_CONTROL='$OPEN_CONTROL', fallback to auto"
+      [[ -t 0 && -t 1 ]]
+      return
+      ;;
+  esac
+}
+
 main() {
   require_root
   ensure_git
@@ -88,6 +111,11 @@ main() {
 
   log "Running install.sh"
   bash install.sh
+
+  if should_open_control; then
+    log "Opening control menu: $APP_DIR/control.sh"
+    exec bash "$APP_DIR/control.sh"
+  fi
 
   log "Done. You can manage service with:"
   log "sudo bash $APP_DIR/control.sh"

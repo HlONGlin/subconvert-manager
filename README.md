@@ -37,7 +37,13 @@ sudo bash -c "$(curl -fsSL https://raw.githubusercontent.com/HlONGlin/subconvert
 
 - 自动拉取仓库到 `/opt/subconvert-manager`
 - 自动执行 `install.sh`
-- 安装完成后可用 `sudo bash /opt/subconvert-manager/control.sh` 管理
+- 安装完成后自动打开 `control.sh` 控制菜单（交互终端下）
+
+如果你不希望自动打开控制器，可关闭：
+
+```bash
+sudo OPEN_CONTROL=0 bash -c "$(curl -fsSL https://raw.githubusercontent.com/HlONGlin/subconvert-manager/main/quick-install.sh)"
+```
 
 ---
 
@@ -125,6 +131,12 @@ sudo APP_DIR=/data/subconvert-manager bash -c "$(curl -fsSL https://raw.githubus
 
 ```bash
 sudo REPO_URL=https://github.com/HlONGlin/subconvert-manager.git BRANCH=main bash -c "$(curl -fsSL https://raw.githubusercontent.com/HlONGlin/subconvert-manager/main/quick-install.sh)"
+```
+
+### 5.1) 想关闭自动打开控制器
+
+```bash
+sudo OPEN_CONTROL=0 bash -c "$(curl -fsSL https://raw.githubusercontent.com/HlONGlin/subconvert-manager/main/quick-install.sh)"
 ```
 
 ### 6) 报错：`pip not found in virtualenv`
