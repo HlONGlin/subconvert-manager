@@ -1,37 +1,47 @@
 # SubConvert Manager
 
-一个用于管理订阅源、进行 Clash/V2Ray 互转、并生成可分发订阅链接的轻量 Web 面板。
+订阅源管理与 Clash/V2Ray 转换网站，支持私有管理链接与公共 token 分发链接。
 
-## 网站功能（简要）
+仓库地址：`https://github.com/HlONGlin/subconvert-manager`
 
-- 首次部署自动进入初始化页面（`/setup`）设置管理员账号密码
-- 登录后台后可管理三类源：
-- `clash_url`（远程 Clash YAML）
-- `clash_yaml`（本地 YAML 文本/上传）
-- `v2ray_text`（URI 多行或 Base64 订阅）
+## 主要功能
+
+- 首次部署自动进入 `/setup`，设置管理员账号密码
+- 管理三类源：`clash_url`、`clash_yaml`、`v2ray_text`
 - 在线转换：
-- Clash -> V2Ray（Base64 或 Raw）
+- Clash -> V2Ray（Base64 / Raw）
 - V2Ray -> Clash（play 模板）
 - 订阅输出：
 - 管理接口：`/s/{sid}/...`
 - 公共接口：`/pub/s/{sid}/...?token=...`
-- 安全项：
-- Basic Auth 登录
-- `SUB_TOKEN` 公共订阅鉴权
+- 登录鉴权：Basic Auth + Session
+- 公共订阅鉴权：`SUB_TOKEN`
 
-## 控制脚本（直链）
+## 控制脚本
 
 - [control.sh](https://github.com/HlONGlin/subconvert-manager/blob/main/control.sh)
 
-通过该脚本可完成安装/更新、重启/停止、自动换端口、查看完整访问 URL（自动探测本机和公网 IP）。
+用于安装/更新、重启/停止、换端口、查看访问 URL。
 
 ---
 
-?????`https://github.com/HlONGlin/subconvert-manager`
+## Linux 一键部署（curl）
 
-## Linux 部署
 
-### 1) 通用方式（推荐）
+
+```bash
+sudo bash -c "$(curl -fsSL https://raw.githubusercontent.com/HlONGlin/subconvert-manager/main/quick-install.sh)"
+```
+
+这个命令会：
+
+- 自动拉取仓库到 `/opt/subconvert-manager`
+- 自动执行 `install.sh`
+- 安装完成后可用 `sudo bash /opt/subconvert-manager/control.sh` 管理
+
+---
+
+## Linux 普通部署（git clone）
 
 ```bash
 cd /opt
@@ -40,55 +50,29 @@ cd subconvert-manager
 sudo bash control.sh
 ```
 
-然后在菜单里选择 `1) Install / Update`。
+在菜单中选 `1) Install / Update`。
 
-安装成功后脚本会输出：
-- 本地访问地址：`http://<local-ip>:<port>/`
-- 公网访问地址（可用时）
-- 首次初始化入口：`/setup`
+安装脚本会自动识别常见发行版包管理器：
 
-### 2) 不同 Linux 发行版支持说明
-
-`install.sh` 会自动识别包管理器并安装依赖，已支持：
-- Debian/Ubuntu（`apt`）
-- RHEL/CentOS/Rocky/Alma/Fedora（`dnf`/`yum`）
-- openSUSE（`zypper`）
-- Arch（`pacman`）
-- Alpine（`apk`）
+- Debian/Ubuntu: `apt`
+- RHEL/CentOS/Rocky/Alma/Fedora: `dnf` / `yum`
+- openSUSE: `zypper`
+- Arch: `pacman`
+- Alpine: `apk`
 
 服务管理器支持：
+
 - `systemd`
 - `openrc`
-- `sysv init`（`service`）
-
-### 3) 常用命令
-
-```bash
-# 打开控制菜单
-sudo bash control.sh
-
-# 直接安装
-sudo bash install.sh
-
-# 卸载服务（保留源码与 data/）
-sudo bash uninstall.sh
-```
+- `sysv init` (`service`)
 
 ---
 
 ## Windows 部署
 
-Windows 不使用 `control.sh`，建议两种方式：
+### 方案 A：WSL（推荐）
 
-### 方案 A：WSL（推荐，最接近 Linux 部署）
-
-在 WSL 里按 Linux 步骤执行即可：
-
-```bash
-git clone https://github.com/HlONGlin/subconvert-manager subconvert-manager
-cd subconvert-manager
-sudo bash control.sh
-```
+在 WSL 内按 Linux 部署步骤执行即可。
 
 ### 方案 B：Windows 原生（PowerShell）
 
@@ -99,25 +83,68 @@ py -3 -m venv .venv
 .\.venv\Scripts\python -m uvicorn app:app --host 0.0.0.0 --port 8000
 ```
 
-访问：
-- `http://127.0.0.1:8000/setup`（首次部署）
-
-如需外网访问，请在防火墙放行端口并自行配置反向代理/HTTPS。
+首次访问：`http://127.0.0.1:8000/setup`
 
 ---
 
+## 一键部署不能用时怎么调整
+
+### 1) 机器没有 curl
+
+改用 wget：
+
+```bash
+wget -O - https://raw.githubusercontent.com/HlONGlin/subconvert-manager/main/quick-install.sh | sudo bash
+```
+
+### 2) 无法访问 raw.githubusercontent.com
+
+改为手动 clone：
+
+```bash
+cd /opt
+git clone https://github.com/HlONGlin/subconvert-manager subconvert-manager
+cd subconvert-manager
+sudo bash install.sh
+```
+
+### 3) 没有 root 权限
+
+- 一键脚本和安装脚本都需要 root（需要写服务文件、安装依赖）
+- 请切换 root 或使用 `sudo`
+
+### 4) 想安装到别的目录
+
+一键命令可带环境变量：
+
+```bash
+sudo APP_DIR=/data/subconvert-manager bash -c "$(curl -fsSL https://raw.githubusercontent.com/HlONGlin/subconvert-manager/main/quick-install.sh)"
+```
+
+### 5) 想固定分支或私有仓库地址
+
+```bash
+sudo REPO_URL=https://github.com/HlONGlin/subconvert-manager.git BRANCH=main bash -c "$(curl -fsSL https://raw.githubusercontent.com/HlONGlin/subconvert-manager/main/quick-install.sh)"
+```
+
+---
+
+## 常用管理命令
+
+```bash
+sudo bash control.sh
+sudo bash install.sh
+sudo bash uninstall.sh
+```
+
 ## 关键配置
 
-配置文件：`config.env`
+`config.env` 常用项：
 
-常用项：
-- `PORT`：监听端口（`auto` 或固定数字）
-- `BASIC_AUTH_USER` / `BASIC_AUTH_PASS`：后台登录
-- `SUB_TOKEN`：公共订阅鉴权 token
-- `SESSION_SECRET`：会话加密密钥
-- `DATA_FILE`：订阅源存储文件（默认 `data/sources.json`）
+- `PORT`
+- `BASIC_AUTH_USER` / `BASIC_AUTH_PASS`
+- `SUB_TOKEN`
+- `SESSION_SECRET`
+- `DATA_FILE`
 
-## 说明
-
-- 首次上线请务必完成 `/setup`，不要使用默认账号密码。
-- 生产环境建议通过 Nginx/Caddy 反向代理并启用 HTTPS。
+建议上线后立刻完成 `/setup`，并在反向代理中启用 HTTPS。
