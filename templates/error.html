@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <title>请求失败 - SubConvert Manager</title>
+  <link rel="stylesheet" href="/static/style.css"/>
+</head>
+<body>
+  <div class="wrap">
+    <div class="top">
+      <div class="brand">
+        <h1>请求失败</h1>
+        <div class="sub">状态码：{{ status_code }}</div>
+      </div>
+      <div class="top-actions">
+        <button class="btn" type="button" data-density-toggle aria-label="切换页面密度"><span data-density-label>切换为紧凑</span></button>
+        <a class="btn" href="/">返回首页</a>
+        <a class="btn" href="/convert">前往转换页</a>
+      </div>
+    </div>
+
+    <div class="card state-block error">
+      <div class="state-title">错误详情</div>
+      <div style="font-weight:700;">{{ detail }}</div>
+      {% if status_code == 401 %}
+      <div class="hint">当前请求需要认证，请确认已登录或检查订阅 token 是否正确。</div>
+      {% endif %}
+      {% if status_code == 404 %}
+      <div class="hint">目标资源不存在，可能已被删除或 URL 输入错误。</div>
+      {% endif %}
+      {% if status_code >= 500 %}
+      <div class="hint">服务端异常，可稍后重试；若持续失败请检查服务日志。</div>
+      {% endif %}
+      <div class="actions" style="margin-top:8px;">
+        <button class="btn" type="button" onclick="window.location.reload();">重试</button>
+        <button class="btn ghost" type="button" onclick="window.history.back();">返回上一页</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3>常见原因</h3>
+      <div class="hint" style="margin-top:8px;">
+        1. 远程订阅地址不可访问、超时或内容格式不合法。<br/>
+        2. 上传 YAML 缺少 <span class="mono">proxies</span> 字段。<br/>
+        3. token、账号密码或请求参数不正确。
+      </div>
+    </div>
+  </div>
+
+  <div id="toast" class="toast" role="status" aria-live="polite">
+    <div class="title">提示</div>
+    <div class="msg"></div>
+  </div>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>

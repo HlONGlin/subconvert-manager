@@ -1,0 +1,113 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <title>{{ "新增订阅源" if not src else "编辑订阅源" }} - SubConvert Manager</title>
+  <link rel="stylesheet" href="/static/style.css"/>
+</head>
+<body>
+  <div class="wrap">
+    <div class="top">
+      <div class="brand">
+        <h1>{{ "新增订阅源" if not src else "编辑订阅源" }}</h1>
+        <div class="sub">保存后自动生成 V2Ray 与 Clash 两类订阅输出。</div>
+      </div>
+      <div class="top-actions">
+        <button class="btn" type="button" data-density-toggle aria-label="切换页面密度"><span data-density-label>切换为紧凑</span></button>
+        <a class="btn" href="/" aria-label="返回首页">返回首页</a>
+      </div>
+    </div>
+
+    <div class="grid">
+      <div class="card">
+        <form action="/sources/save" method="post" enctype="multipart/form-data" data-lock-submit>
+          <input type="hidden" name="sid" value="{{ src.id if src else '' }}"/>
+
+          <div class="row">
+            <label for="source-name">名称</label>
+            <input id="source-name" name="name" value="{{ src.name if src else '' }}" placeholder="例如：我的机场A / 自建节点" required aria-label="订阅源名称"/>
+          </div>
+
+          <div class="row">
+            <label for="source-kind">类型</label>
+            <select id="source-kind" name="kind" required aria-label="订阅源类型">
+              <option value="clash_url" {% if src and src.kind=='clash_url' %}selected{% endif %}>clash_url（远程 YAML）</option>
+              <option value="v2ray_text" {% if src and src.kind=='v2ray_text' %}selected{% endif %}>v2ray_text（多行 URI / base64）</option>
+              <option value="clash_yaml" {% if src and src.kind=='clash_yaml' %}selected{% endif %}>clash_yaml（本地文本/文件）</option>
+            </select>
+            <div class="hint">后端会按类型进行解析和校验。</div>
+          </div>
+
+          <div class="quick-grid">
+            <div class="row">
+              <label>Clash 默认模板</label>
+              <div class="hint">固定为 <span class="mono">play</span>。</div>
+              <input type="hidden" name="clash_template" value="play"/>
+            </div>
+            <div class="row">
+              <label for="source-rate-limit">限速（Mbps，可选）</label>
+              <input
+                id="source-rate-limit"
+                name="rate_limit_mbps"
+                type="number"
+                min="0"
+                max="10000"
+                value="{{ src.rate_limit_mbps if src and src.rate_limit_mbps else 0 }}"
+                data-validate-int
+                data-min="0"
+                data-max="10000"
+                aria-label="限速 Mbps"
+              />
+              <div class="hint">仅在 play 模板中生效。</div>
+            </div>
+          </div>
+
+          <div class="row">
+            <label for="source-value">内容</label>
+            <textarea
+              id="source-value"
+              name="value"
+              class="out"
+              style="height:240px;"
+              placeholder="clash_url: 粘贴 URL\nv2ray_text: 粘贴 URI 或 base64\nclash_yaml: 粘贴 YAML"
+              aria-label="订阅源内容"
+            >{{ src.value if src else '' }}</textarea>
+          </div>
+
+          <div class="row">
+            <label for="source-file">仅 clash_yaml 可上传文件覆盖文本</label>
+            <input id="source-file" type="file" name="file" accept=".yaml,.yml,text/yaml" aria-label="上传 YAML 文件"/>
+          </div>
+
+          <div class="actions" style="margin-top:12px;">
+            <button class="btn primary" type="submit">保存</button>
+            <a class="btn ghost" href="/">取消</a>
+          </div>
+        </form>
+      </div>
+
+      <div class="card">
+        <h3>输入规范</h3>
+        <div class="hint" style="margin-top:8px;">
+          <span class="mono">clash_url</span>：填写可访问的 http/https YAML 链接。<br/>
+          <span class="mono">v2ray_text</span>：支持多行 URI 或单段 Base64 订阅文本。<br/>
+          <span class="mono">clash_yaml</span>：适合离线保存或手工编辑后的 YAML。
+        </div>
+        {% if src %}
+        <hr class="sep"/>
+        <div class="hint">当前 ID：<span class="mono">{{ src.id }}</span></div>
+        <div class="hint">最近更新：<span class="mono">{{ src.updated_at|fmt_ts }}</span></div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+  <div id="toast" class="toast" role="status" aria-live="polite">
+    <div class="title">提示</div>
+    <div class="msg"></div>
+  </div>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>

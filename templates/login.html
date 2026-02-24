@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <title>登录 - SubConvert Manager</title>
+  <link rel="stylesheet" href="/static/style.css"/>
+</head>
+<body>
+  <div class="wrap">
+    <div class="card" style="max-width:520px;margin:8vh auto 0;">
+      <div class="brand">
+        <h1 style="font-size:24px;">管理员登录</h1>
+        <div class="sub">请输入管理员账号密码后进入控制台。</div>
+      </div>
+
+      {% if error %}
+      <div class="state-block error" style="margin-top:12px;">
+        <div class="state-title">登录失败</div>
+        <div class="hint">{{ error }}</div>
+      </div>
+      {% endif %}
+
+      <form method="post" action="/login" data-lock-submit style="margin-top:14px;display:grid;gap:12px;">
+        <div>
+          <label for="login-user">账号</label>
+          <input id="login-user" name="username" autocomplete="username" required aria-label="账号"/>
+        </div>
+
+        <div>
+          <label for="login-pass">密码</label>
+          <input id="login-pass" type="password" name="password" autocomplete="current-password" required aria-label="密码"/>
+        </div>
+
+        <div class="actions" style="margin-top:6px;">
+          <button class="btn primary" type="submit">登录</button>
+          <a class="btn" href="/">返回首页</a>
+        </div>
+
+        <div class="hint">
+          建议在 <span class="mono">config.env</span> 设置强密码，并配置 <span class="mono">SESSION_SECRET</span> 与 <span class="mono">SUB_TOKEN</span>。
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <div id="toast" class="toast" role="status" aria-live="polite">
+    <div class="title">提示</div>
+    <div class="msg"></div>
+  </div>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>

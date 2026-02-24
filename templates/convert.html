@@ -1,0 +1,112 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <title>在线转换 - SubConvert Manager</title>
+  <link rel="stylesheet" href="/static/style.css"/>
+</head>
+<body>
+  <div class="wrap">
+    <div class="top">
+      <div class="brand">
+        <h1>在线转换</h1>
+        <div class="sub">在不修改原订阅数据的前提下，完成 Clash 与 V2Ray 互转。</div>
+      </div>
+      <div class="top-actions">
+        <button class="btn" type="button" data-density-toggle aria-label="切换页面密度"><span data-density-label>切换为紧凑</span></button>
+        <a class="btn" href="/" aria-label="返回管理">返回管理</a>
+        <a class="btn danger" href="/logout" aria-label="退出登录">退出登录</a>
+      </div>
+    </div>
+
+    <div class="grid">
+      <div class="card" data-state-region="convert-clash">
+        <h3>Clash → V2Ray</h3>
+        <div class="hint" style="margin-top:6px;">支持远程订阅 URL 或上传本地 YAML 文件。</div>
+        <hr class="sep"/>
+
+        <form action="/convert/clash_to_v2ray" method="post" enctype="multipart/form-data" data-lock-submit>
+          <div class="row">
+            <label for="clash-url">Clash 订阅链接（可选）</label>
+            <input id="clash-url" name="url" placeholder="https://example.com/sub.yaml" data-validate-url aria-label="Clash 订阅链接"/>
+            <div class="hint">推荐 HTTPS，远程请求失败会返回可重试错误页。</div>
+          </div>
+
+          <div class="row">
+            <label for="clash-file">或上传 Clash YAML 文件（可选）</label>
+            <input id="clash-file" type="file" name="file" accept=".yaml,.yml,text/yaml" aria-label="上传 Clash YAML 文件"/>
+          </div>
+
+          <div class="row">
+            <label for="clash-out">输出格式</label>
+            <select id="clash-out" name="out" aria-label="选择输出格式">
+              <option value="base64">V2Ray Base64 订阅</option>
+              <option value="raw">V2Ray Raw 多行 URI</option>
+            </select>
+          </div>
+
+          <div class="actions" style="margin-top:12px;">
+            <button class="btn primary" type="submit">开始转换</button>
+          </div>
+        </form>
+      </div>
+
+      <div class="card" data-state-region="convert-v2ray">
+        <h3>V2Ray → Clash</h3>
+        <div class="hint" style="margin-top:6px;">支持粘贴多行 URI，或直接粘贴 Base64 订阅文本。</div>
+        <hr class="sep"/>
+
+        <form action="/convert/v2ray_to_clash" method="post" data-lock-submit>
+          <div class="row">
+            <label for="v2ray-text">V2Ray 输入内容</label>
+            <textarea
+              id="v2ray-text"
+              name="text"
+              class="out"
+              style="height:220px;"
+              placeholder="vmess://...\nvless://...\ntrojan://...\nss://...\n\n或 Base64 订阅文本"
+              required
+              aria-label="输入 V2Ray 文本"
+            ></textarea>
+          </div>
+
+          <div class="quick-grid">
+            <div class="row">
+              <label>Clash 输出模板</label>
+              <div class="hint">固定为 <span class="mono">play</span>（分组 + 策略）。</div>
+            </div>
+            <div class="row">
+              <label for="rate-limit">限速（Mbps，可选）</label>
+              <input id="rate-limit" name="rate_limit_mbps" type="number" min="0" max="10000" value="0" data-validate-int data-min="0" data-max="10000" aria-label="限速 Mbps"/>
+              <div class="hint">应用于 play 输出。</div>
+            </div>
+          </div>
+
+          <input type="hidden" name="out" value="yaml"/>
+          <input type="hidden" name="template" value="play"/>
+
+          <div class="actions" style="margin-top:12px;">
+            <button class="btn primary" type="submit">转换为 Clash YAML</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3>状态说明</h3>
+      <div class="hint" style="margin-top:8px;">
+        转换区域覆盖 loading / empty / error / disabled / success 的稳定提示风格：
+        失败时可直接返回重试，提交时按钮自动进入 loading 并防重复提交。
+      </div>
+    </div>
+  </div>
+
+  <div id="toast" class="toast" role="status" aria-live="polite">
+    <div class="title">提示</div>
+    <div class="msg"></div>
+  </div>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>
