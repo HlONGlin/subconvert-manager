@@ -7,17 +7,20 @@ ENV_FILE="$APP_DIR/config.env"
 SERVICE_NAME="subconvert-manager"
 SERVICE_FILE_SYSTEMD="/etc/systemd/system/${SERVICE_NAME}.service"
 PYTHON_BIN="${PYTHON_BIN:-}"
+REPO_URL="${REPO_URL:-https://github.com/HlONGlin/subconvert-manager.git}"
+BRANCH="${BRANCH:-main}"
+BOOTSTRAP_DIR="${BOOTSTRAP_DIR:-/opt/subconvert-manager}"
 
 log() {
   printf '[%s] %s\n' "$(date '+%Y-%m-%d %H:%M:%S')" "$*"
 }
 
 warn() {
-  printf '[%s] WARN: %s\n' "$(date '+%Y-%m-%d %H:%M:%S')" "$*" >&2
+  printf '[%s] 警告: %s\n' "$(date '+%Y-%m-%d %H:%M:%S')" "$*" >&2
 }
 
 die() {
-  printf '[%s] ERROR: %s\n' "$(date '+%Y-%m-%d %H:%M:%S')" "$*" >&2
+  printf '[%s] 错误: %s\n' "$(date '+%Y-%m-%d %H:%M:%S')" "$*" >&2
   exit 1
 }
 
@@ -25,10 +28,73 @@ has_cmd() {
   command -v "$1" >/dev/null 2>&1
 }
 
+detect_pkg_manager() {
+  if has_cmd apt-get; then echo "apt"; return; fi
+  if has_cmd dnf; then echo "dnf"; return; fi
+  if has_cmd yum; then echo "yum"; return; fi
+  if has_cmd zypper; then echo "zypper"; return; fi
+  if has_cmd pacman; then echo "pacman"; return; fi
+  if has_cmd apk; then echo "apk"; return; fi
+  echo "none"
+}
+
 require_root() {
   if [[ "${EUID:-$(id -u)}" -ne 0 ]]; then
-    die "Please run as root: sudo bash control.sh"
+    die "请使用 root 权限运行：sudo bash control.sh"
   fi
+}
+
+ensure_git() {
+  if has_cmd git; then
+    return
+  fi
+
+  local pm
+  pm="$(detect_pkg_manager)"
+  warn "未找到 git，尝试通过包管理器安装：$pm"
+
+  case "$pm" in
+    apt)
+      export DEBIAN_FRONTEND=noninteractive
+      apt-get update -y
+      apt-get install -y git
+      ;;
+    dnf) dnf -y install git ;;
+    yum) yum -y install git ;;
+    zypper) zypper --non-interactive install git ;;
+    pacman) pacman -Sy --noconfirm git ;;
+    apk) apk add --no-cache git ;;
+    *)
+      die "未找到 git，且当前包管理器不受支持，请先手动安装 git。"
+      ;;
+  esac
+}
+
+bootstrap_repo_if_needed() {
+  if [[ -f "$APP_DIR/install.sh" && -f "$APP_DIR/uninstall.sh" ]]; then
+    return
+  fi
+
+  require_root
+  ensure_git
+
+  log "引导模式：当前路径不是完整项目目录"
+  log "正在同步仓库到 $BOOTSTRAP_DIR（分支：$BRANCH）"
+
+  mkdir -p "$(dirname "$BOOTSTRAP_DIR")"
+  if [[ -d "$BOOTSTRAP_DIR/.git" ]]; then
+    git -C "$BOOTSTRAP_DIR" fetch origin "$BRANCH"
+    git -C "$BOOTSTRAP_DIR" checkout "$BRANCH"
+    git -C "$BOOTSTRAP_DIR" pull --ff-only origin "$BRANCH"
+  else
+    if [[ -e "$BOOTSTRAP_DIR" ]] && [[ -n "$(ls -A "$BOOTSTRAP_DIR" 2>/dev/null || true)" ]]; then
+      die "引导目标目录非空：$BOOTSTRAP_DIR"
+    fi
+    git clone --depth 1 -b "$BRANCH" "$REPO_URL" "$BOOTSTRAP_DIR"
+  fi
+
+  chmod +x "$BOOTSTRAP_DIR/control.sh" "$BOOTSTRAP_DIR/install.sh" "$BOOTSTRAP_DIR/uninstall.sh" || true
+  exec bash "$BOOTSTRAP_DIR/control.sh" "$@"
 }
 
 detect_service_mgr() {
@@ -57,7 +123,7 @@ service_restart() {
     systemd) systemctl restart "$SERVICE_NAME" ;;
     openrc) rc-service "$SERVICE_NAME" restart ;;
     sysv) service "$SERVICE_NAME" restart ;;
-    *) die "No supported service manager found" ;;
+    *) die "未找到受支持的服务管理器" ;;
   esac
 }
 
@@ -66,7 +132,7 @@ service_stop() {
     systemd) systemctl stop "$SERVICE_NAME" ;;
     openrc) rc-service "$SERVICE_NAME" stop ;;
     sysv) service "$SERVICE_NAME" stop ;;
-    *) die "No supported service manager found" ;;
+    *) die "未找到受支持的服务管理器" ;;
   esac
 }
 
@@ -75,7 +141,7 @@ service_status() {
     systemd) systemctl status "$SERVICE_NAME" --no-pager ;;
     openrc) rc-service "$SERVICE_NAME" status ;;
     sysv) service "$SERVICE_NAME" status ;;
-    *) die "No supported service manager found" ;;
+    *) die "未找到受支持的服务管理器" ;;
   esac
 }
 
@@ -109,7 +175,7 @@ pick_python_bin() {
     echo "python"
     return
   fi
-  die "python3/python not found"
+  die "未找到 python3 或 python"
 }
 
 auto_port() {
@@ -182,29 +248,29 @@ show_access_urls() {
   public_ip="$(detect_public_ip || true)"
 
   echo "----------------------------------------"
-  echo "Service manager: $SERVICE_MGR"
-  echo "Detected OS: $(detect_os)"
-  echo "Port: $port"
-  echo "Local URL:  http://${local_ip}:${port}/"
+  echo "服务管理器：$SERVICE_MGR"
+  echo "系统信息：$(detect_os)"
+  echo "端口：$port"
+  echo "内网地址：http://${local_ip}:${port}/"
   if [[ -n "$public_ip" && "$public_ip" != "$local_ip" ]]; then
-    echo "Public URL: http://${public_ip}:${port}/"
+    echo "公网地址：http://${public_ip}:${port}/"
   fi
-  echo "First-time setup URL: /setup"
+  echo "首次初始化页面：http://${local_ip}:${port}/setup"
   echo "----------------------------------------"
 }
 
 show_menu() {
   echo "=============================="
-  echo " SubConvert Manager Control"
+  echo " SubConvert Manager 控制器"
   echo "=============================="
-  echo "1) Install / Update"
-  echo "2) Uninstall service (keep data/)"
-  echo "3) Restart service"
-  echo "4) Stop service"
-  echo "5) Service status + access URL"
-  echo "6) Change to a random free port"
-  echo "7) Show access URL only"
-  echo "0) Exit"
+  echo "1) 安装或更新"
+  echo "2) 卸载服务（保留 data/）"
+  echo "3) 重启服务"
+  echo "4) 停止服务"
+  echo "5) 查看服务状态与访问地址"
+  echo "6) 切换到随机空闲端口"
+  echo "7) 仅显示访问地址"
+  echo "0) 退出"
   echo "------------------------------"
 }
 
@@ -222,14 +288,14 @@ do_uninstall() {
 do_restart() {
   require_root
   service_restart
-  echo "Service restarted."
+  echo "服务已重启。"
   show_access_urls
 }
 
 do_stop() {
   require_root
   service_stop
-  echo "Service stopped."
+  echo "服务已停止。"
 }
 
 do_status() {
@@ -250,14 +316,14 @@ do_change_port() {
   fi
 
   service_restart
-  echo "Switched to new port: $new_port"
+  echo "已切换到新端口：$new_port"
   show_access_urls
 }
 
 main() {
   while true; do
     show_menu
-    read -r -p "Select: " choice
+    read -r -p "请选择操作：" choice
     case "$choice" in
       1) do_install ;;
       2) do_uninstall ;;
@@ -267,10 +333,11 @@ main() {
       6) do_change_port ;;
       7) show_access_urls ;;
       0) exit 0 ;;
-      *) echo "Invalid option." ;;
+      *) echo "无效选项，请重新输入。" ;;
     esac
     echo
   done
 }
 
+bootstrap_repo_if_needed "$@"
 main "$@"

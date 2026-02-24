@@ -30,20 +30,13 @@
 
 
 ```bash
-sudo bash -c "$(curl -fsSL https://raw.githubusercontent.com/HlONGlin/subconvert-manager/main/quick-install.sh)"
+sudo bash -c "$(curl -fsSL https://raw.githubusercontent.com/HlONGlin/subconvert-manager/main/control.sh)"
 ```
 
 这个命令会：
 
 - 自动拉取仓库到 `/opt/subconvert-manager`
-- 自动执行 `install.sh`
-- 安装完成后自动打开 `control.sh` 控制菜单（交互终端下）
-
-如果你不希望自动打开控制器，可关闭：
-
-```bash
-sudo OPEN_CONTROL=0 bash -c "$(curl -fsSL https://raw.githubusercontent.com/HlONGlin/subconvert-manager/main/quick-install.sh)"
-```
+- 自动进入 `control.sh` 菜单，选择 `1) Install / Update` 即可安装
 
 ---
 
@@ -100,7 +93,7 @@ py -3 -m venv .venv
 改用 wget：
 
 ```bash
-wget -O - https://raw.githubusercontent.com/HlONGlin/subconvert-manager/main/quick-install.sh | sudo bash
+wget -O - https://raw.githubusercontent.com/HlONGlin/subconvert-manager/main/control.sh | sudo bash
 ```
 
 ### 2) 无法访问 raw.githubusercontent.com
@@ -119,24 +112,18 @@ sudo bash install.sh
 - 一键脚本和安装脚本都需要 root（需要写服务文件、安装依赖）
 - 请切换 root 或使用 `sudo`
 
-### 4) 想安装到别的目录
+### 4) 想把仓库拉到别的目录
 
 一键命令可带环境变量：
 
 ```bash
-sudo APP_DIR=/data/subconvert-manager bash -c "$(curl -fsSL https://raw.githubusercontent.com/HlONGlin/subconvert-manager/main/quick-install.sh)"
+sudo BOOTSTRAP_DIR=/data/subconvert-manager bash -c "$(curl -fsSL https://raw.githubusercontent.com/HlONGlin/subconvert-manager/main/control.sh)"
 ```
 
 ### 5) 想固定分支或私有仓库地址
 
 ```bash
-sudo REPO_URL=https://github.com/HlONGlin/subconvert-manager.git BRANCH=main bash -c "$(curl -fsSL https://raw.githubusercontent.com/HlONGlin/subconvert-manager/main/quick-install.sh)"
-```
-
-### 5.1) 想关闭自动打开控制器
-
-```bash
-sudo OPEN_CONTROL=0 bash -c "$(curl -fsSL https://raw.githubusercontent.com/HlONGlin/subconvert-manager/main/quick-install.sh)"
+sudo REPO_URL=https://github.com/HlONGlin/subconvert-manager.git BRANCH=main bash -c "$(curl -fsSL https://raw.githubusercontent.com/HlONGlin/subconvert-manager/main/control.sh)"
 ```
 
 ### 6) 报错：`pip not found in virtualenv`
