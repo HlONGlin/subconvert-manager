@@ -15,6 +15,14 @@ class TestConverter(unittest.TestCase):
         out = split_v2ray_text("\n\nvmess://a\n\n")
         self.assertEqual(out, ["vmess://a"])
 
+    def test_split_v2ray_text_urlsafe_base64(self):
+        # urlsafe base64 payload that contains '-' and used to fail decode.
+        raw = "vmess://>\nvless://>\n"
+        b64 = base64.urlsafe_b64encode(raw.encode("utf-8")).decode("utf-8").rstrip("=")
+        self.assertIn("-", b64)
+        out = split_v2ray_text(b64)
+        self.assertEqual(out, ["vmess://>", "vless://>"])
+
     def test_build_clash_yaml_empty(self):
         doc = build_clash_yaml([])
         self.assertIn("proxy-groups", doc)

@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <title>Initial Setup - SubConvert Manager</title>
+  <link rel="stylesheet" href="/static/style.css"/>
+</head>
+<body>
+  <div class="wrap">
+    <div class="card" style="max-width:560px;margin:8vh auto 0;">
+      <div class="brand">
+        <h1 style="font-size:24px;">首次初始化</h1>
+        <div class="sub">请先设置管理员账号和密码，完成后才能使用管理功能。</div>
+      </div>
+
+      {% if error %}
+      <div class="state-block error" style="margin-top:12px;">
+        <div class="state-title">初始化失败</div>
+        <div class="hint">{{ error }}</div>
+      </div>
+      {% endif %}
+
+      <form method="post" action="/setup" data-lock-submit style="margin-top:14px;display:grid;gap:12px;">
+        <div>
+          <label for="setup-user">管理员账号</label>
+          <input
+            id="setup-user"
+            name="username"
+            value="{{ username }}"
+            autocomplete="username"
+            required
+            minlength="3"
+            maxlength="64"
+            aria-label="管理员账号"
+          />
+        </div>
+
+        <div>
+          <label for="setup-pass">管理员密码</label>
+          <input
+            id="setup-pass"
+            type="password"
+            name="password"
+            autocomplete="new-password"
+            required
+            minlength="8"
+            maxlength="128"
+            aria-label="管理员密码"
+          />
+        </div>
+
+        <div>
+          <label for="setup-pass2">确认密码</label>
+          <input
+            id="setup-pass2"
+            type="password"
+            name="confirm_password"
+            autocomplete="new-password"
+            required
+            minlength="8"
+            maxlength="128"
+            aria-label="确认密码"
+          />
+        </div>
+
+        <div class="actions" style="margin-top:6px;">
+          <button class="btn primary" type="submit">保存并进入控制台</button>
+        </div>
+
+        <div class="hint">
+          建议使用强密码。保存后会写入 <span class="mono">config.env</span> 并立即生效。
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <div id="toast" class="toast" role="status" aria-live="polite">
+    <div class="title">提示</div>
+    <div class="msg"></div>
+  </div>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>

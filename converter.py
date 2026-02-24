@@ -1,8 +1,9 @@
 import base64
 import json
+import locale
 import re
 import urllib.parse
-from typing import Dict, List, Tuple, Optional
+from typing import Dict, List, Optional, Tuple
 
 
 # ------------------ utils ------------------
@@ -393,11 +394,9 @@ def build_clash_yaml(proxies: List[Dict]) -> Dict:
 
 
 
-# ------------------ ClashPlay 濠碉紕鍋涢鍛偓娑掓櫊閹囧箹娴ｅ湱鍘愰悗骞垮劚濞层劑寮搁崒鐐寸厽闁靛繈鍨归弸鎴︽煕閵婏箑鍝洪柡浣哥Ч瀹曞ジ濮€閳╁啯顓瑰┑鐐茬摠缁瞼鑺遍崼鏇炵劦妞ゆ帊鑳堕惌鎺楁煕鎼粹槅鍤熺紒杈ㄦ楠炴捇骞掗弬鍝勪壕闁绘垼妫勯悘铏節婵犲嫮澹攁sh YAML闂?------------------
+# ------------------ ClashPlay YAML builder ------------------
 
-import locale
-
-# 闂備礁鎼張顒勫礉閹烘棁濮虫繛宸簼閸嬫繃銇勯弽銊ュ毈闁哄棙姊圭换娑氫沪缁嬪灝鈷夊┑鐘亾?zh_CN.UTF-8闂備焦瀵х粙鎴炵附閺冨倹顫曢柟娈垮枓閸嬫挻鎷呴崘顭戞闂?locale.Error闂備焦瀵х粙鎺旂矙閺嶎偅宕查柡宥庡幗閻撳倿鎮橀悙璺盒撻柡鍛偢閺屾盯寮埀顒傜矙閺嶎収鏁婇柡鍥╁Х绾剧偓銇勯弴鐐搭棤缂佲偓婢跺鐔嗛柟顖涘缁ㄥ潡鎮峰▎娆戠暤鐎规洘鑹鹃埢搴ㄥ箻閹碱厸鍋撻弽顐ょ＜闁绘瑦鐟ょ拋鏌ュ磻?
+# Prefer locale-aware sorting for Chinese names when available.
 try:
     locale.setlocale(locale.LC_ALL, "zh_CN.UTF-8")
     _LOCALE_OK = True
@@ -411,9 +410,7 @@ def _extract_number_for_sort(name: str) -> int:
 
 
 def _extract_keyword_for_group(name: str) -> Tuple[str, str]:
-    """
-    濠电偛顕慨鏉戭潩閿旀垝绻嗘い鎾卞灪閸婄兘鏌ｉ悢鍝勵暭闁稿﹤鍟块埥澶愬箼閸愩劌绠烘繝鐢靛仜閿曨亜鐣烽敐澶婂唨闁靛牆鍊告禍鐐節婵炴儳浜鹃梺鐓庣仛閸ㄥ灝顕ｉ鍕倞妞ゆ巻鍋撻柛鏂诲劦閺?+ 闂備礁鍚嬪Σ鎺撱仈閹间礁鍑犻柛鎰靛枟閻掗箖鏌曟繛鍨姎闁诲骸顭烽弻宥夊Ψ閿斿墽顔囩紓浣介哺缁诲牓骞冩禒瀣╅柕鍫濇穿婢规﹢姊洪崨濠傜瑨婵☆偅绋撻崚?闂備礁婀遍崕銈囨暜閹烘棁濮虫い鎾卞灩杩?
-    濠电偞鍨堕幑浣割浖閵娧冨灊闁割偆鍠撻埢鏇㈡煕椤愵剛绉垫繛璇х秮瀵爼鍩￠崒婊勫櫏缂備胶濮烽崑銈呯暦閹存繍娼╅柛鎾楀懐宕?    - 闂備胶绮划宥咁熆濮椻偓閹潡宕熼娑氬帓闁诲繒鍋熼弲顐﹀矗閹存繍鐔嗛柤鍝ユ暩椤ｅ弶绻濊閸嬫捇姊洪棃鈺冪暢婵℃ぜ鍔庡Σ鎰閺夋垶宓嶉梺闈涱焾閸斿矁鐏愰梻浣虹帛閸旀骞婇幘璇茬畺闁哄洢鍨洪悡鍌炴倶閻愭潙绀冪紒灞芥健閺屾稑顫濋鍌氼暤闂侀€炲苯澧紒顔艰嫰闇夋俊銈呭暊閸?缂傚倷鐒﹀畷姗€宕曟繝姘剹闁绘劦鍓涢埢鏃€銇勯幘璺烘瀾闁?+ 缂傚倷鐒﹀畷姗€宕曟繝姘剹濡わ絽鍟崵鎰板级閸稑濡介柣?缂傚倸鍊搁崐褰掓偋閺嚶颁汗闁秆勵殔閻忚櫕绻濋崹顐ｅ暗缂佲偓?      闂備胶鍎甸弲娑㈡偤閵娧勬殰闁圭虎鍠栫粻鏉款熆鐠虹尨鍔熼柟鐣屽枔缁辨帒螖鐎ｎ剛绐楅柣鐔告礀濡繈鐛幒妤€绠抽柟瀵稿Х椤ｅ弶绻涢弶鎴濇倯闁肩懓澧藉▎銏ゅ閿涘嫧鏋欓梺瑙勫絻椤戝洭鐛姀銈呯骇闁冲搫鍊婚幊鍥煕閿濆妫戝ù婊冩啞缁傛帞鈧綆浜濋锟犳煟閻樿精顔夐柡鍛洴楠炲啴骞樼€电硶鏋栭梺閫炲苯澧伴柣銉邯閹虫顢涘鍛暥闂備浇澹堟ご鎼佹嚌閹嶈€挎い蹇撴噽閳绘棃鏌嶈閸撴盯骞愯瀹曟瑩濡堕崶鈺婃Х濠电偞鎸婚懝楣冨Φ濡壈濮虫い鎺戝閻掕顭跨捄渚剰妞ゅ繈鍎遍埥澶愬箻閾忣偅宕冲┑鐑囩秵閸ｏ綁鐛惔銊ノч柛鎰剁到娴?    """
+    """Extract Chinese and English keyword fragments from a proxy name."""
     chinese = ''.join(re.findall(r"[\u4e00-\u9fff]+", name or ""))
     english = ''.join(re.findall(r"[A-Za-z]+", name or "")).lower()
     return chinese, english
@@ -435,10 +432,14 @@ def build_clashplay_yaml(
     tolerance_ms: int = 50,
 ) -> Dict:
     """
-    闂備焦鐪归崹濠氬窗閹版澘鍨傛慨妯挎硾閸楁娊鎮楀☉娅亝寰勫澶婄骇?ClashPlay 闂備焦鐪归崝宀€鈧皜鍥х劦妞ゆ帊鑳堕惌濠勬喐閻楀牏鍙€闁诡垰瀚埀顒佺⊕閿氬璺虹Ч濮婃椽顢欓崫鍕瀷闁荤姳鐒﹂悡锟犲垂閹€鏀介柛顐ゅ枔閺?Clash 闂傚倷鐒﹀妯肩矓閸洘鍋柛鈩冪☉杩?
-    闂佽崵濮抽悞锕€鐣峰鈧、姗€骞栨担鐟板壆濡炪倖姊婚弲顐﹀垂婵傚憡鐓?    - 濠电偞鍨堕幐鍝ョ矓閻㈢鏋佸┑鍌滎焾閻?subconvert-manager 闂備焦鐪归崝宀€鈧凹鍙冮幃褏鈧湱濮烽悿鈧梺鍛婂姦閸樺ジ宕㈤幘顔界厱闁哄啠鍋撻柛鎰吹濡叉劕鈻庨幇顕呮锤闂佸湱鍎ゅú妯肩矈?闂佽崵濮抽梽宥夊垂閽樺）锝夊礋椤掍胶绉堕梺瑙勫劤閸熷灝袙婢舵劖鐓?    - 濠碘槅鍋嗘晶妤冩崲閸岀倛鍥ㄧ節濮橆剛顔岄梺褰掑亰娴滅偞娼婚弬搴撴闁圭虎鍨版禍鐐箾閹寸偞鎯勫ù婊勭墵閸┾偓妞ゆ帊鑳堕惌鎺楁煕鎼粹槅鍤熺紒杈ㄦ楠炴捇骞掗弬鍝勪壕鐎瑰嫭瀚堥悢鐓庣労闁告劏鏅濋崙锟犳⒑閻愯棄鍔滅紒缁樺姉濡叉劖瀵肩€涙ê娈滃銈呯箰鐎氼剝顤勯梻浣告啞鐢帒螞濞戞艾鍨?+ 闂佽崵濮甸崝妤呭窗閺囩伝褰掑炊椤掆偓闁裤倝鏌涢妷顔荤暗闁逞屽厴閸?+ 闂備胶鍘ч〃搴㈢濠婂嫭鍙忛柍杞版€ラ崷顓涘亾閿濆骸鏋撻柛?+ 闂備礁鎼ú锕€顭囧▎鎾村仼妞ゆ帒瀚弸渚€鎮楅棃娑欏暈闁伙綁浜堕幃宄扳枎韫囨搩浠奸梺鍓茬厛閸ㄩ亶銆冮妷鈺佄╅柨鏂垮綖濡?
-    婵犵數鍋涢ˇ顓㈠礉瀹ュ绀堝ù鐓庣摠閺?    - 闂佽崵鍠愰悷銉р偓姘煎墴瀹曞綊顢涘鈧悞濠偯归悩宸剰婵炲懌鍊曡彁闁搞儯鍔庣粻鏍倵閸偅鈷掗柍褜鍓涢弫濠氬焵椤掍胶銆掗柣鐔哥箞閺?Clash 闂備礁鎲￠崝鏇㈠箠韫囨稒鍋嬮柟鎯版缁€鍌炴煟閹惧啿鐦ㄩ柛鐔锋喘閺屻劌鈽夊Ο鐓庘叺婵炴潙鐨烽弲鐘茬暦濡も偓椤撳ジ宕熼锛勨敍闂?GEOSITE 缂傚倷鐒︾粙鎴λ囬悧鍫熸珷閻犳亽鍔嬪▽顏堟煛閸ユ湹绨界紒鈧崱娑欑厪?    - 濠电姷顣介埀顒€鍟块埀顒€鐏濋妴鎺楀醇閺囩喎娈滃銈呯箰鐎氼噣寮抽弶搴撴闁哄倹顑欏Σ鍏笺亜椤愩埄妯€鐎?闂備礁鎲＄敮鎺懳涘☉姘灊鐎广儱顦伴弲顒傗偓鍏夊亾闁告劖鍎冲▓鏌ユ⒑闂堚晞绀嬮柛鏂跨Ч椤㈡鈹戠€ｎ亞顦╅梺鍏间航閸庢彃鈻撻崼鏇熺厱闁冲搫瀚鐘炽亜閵忕姵鍣虹紒瀣槹缁绘繈宕橀妸銏″瘶闂佽绻掗崑鐐裁洪埡鍐╊潟婵犻潧顑嗛崵鈧柣蹇曞仩閸嬫劙鎮峰┑瀣厸闁告洟娼ч悘锟犳煛娴ｆ悶鍋㈢€规洘绻堟俊鎼佹晜閺傘倗绀堥梻?build_clash_yaml闂備焦瀵х粙鎴︽偋婵犲倶鈧帡宕滄担椋庡墾闂婎偄娲ら柊锝夊汲閸涘瓨鐓曢煫鍥ь儏閸旂數绱掓潏銊ュ摵濠?    """
-    # --- 1) 闂備胶纭堕弲鐐测枍閿濆鈧線宕ㄩ婧惧亾閹烘宸濇い鏃傝檸濡差垱绻涢幋鐐村碍閻庢稈鏅濋弫顕€骞樼€涙ê鍔?---
+    Build a ClashPlay-style YAML document from parsed proxies.
+
+    Current behavior:
+    - generate grouped load-balance and url-test strategy groups
+    - add a top-level select group
+    - optionally apply a global rate limit
+    """
+    # 1) sanitize input proxies and sort by keyword + number
     cleaned = []
     for p in proxies or []:
         if not isinstance(p, dict):
@@ -456,7 +457,7 @@ def build_clashplay_yaml(
 
     cleaned.sort(key=lambda x: _keyword_sort_key(x.get('name') or ''))
 
-    # --- 2) 闂備胶顭堢换鎴炵箾婵犲洤鏋佹い鎾跺У鐎氭氨鈧箍鍎遍幊搴ㄦ倵閼姐倗纾?-> 闂佽崵濮甸崝妤呭窗閺囩伝褰掑炊椤掆偓闁裤倝鏌涢妷顔荤暗闁逞屽厴閸?/ 闂備胶鍘ч〃搴㈢濠婂嫭鍙忛柍鍝勬噺閻掕顭跨捄渚剰妞?---
+    # 2) generate grouped strategy groups and the final select group
     grouped: Dict[Tuple[str, str], List[str]] = {}
     for p in cleaned:
         k = _extract_keyword_for_group(p.get('name') or '')
@@ -743,11 +744,22 @@ def split_v2ray_text(text: str) -> List[str]:
         return []
     # Heuristic: if no scheme and mostly base64 chars, treat as subscription base64
     if "://" not in t and re.fullmatch(r"[A-Za-z0-9+/=\s_-]+", t):
-        try:
-            decoded = base64.b64decode(t + "==="[: (4 - len(t) % 4) % 4]).decode("utf-8", errors="ignore")
-            lines = [x.strip() for x in decoded.splitlines() if x.strip()]
-            if lines and any("://" in x for x in lines):
-                return lines
-        except Exception:
-            pass
+        compact = re.sub(r"\s+", "", t)
+        candidates = [compact]
+        swapped = compact.replace("-", "+").replace("_", "/")
+        if swapped != compact:
+            candidates.append(swapped)
+
+        for candidate in candidates:
+            for decoder in (
+                lambda s: base64.b64decode(s + "==="[: (4 - len(s) % 4) % 4]),
+                b64_urlsafe_decode,
+            ):
+                try:
+                    decoded = decoder(candidate).decode("utf-8", errors="ignore")
+                except Exception:
+                    continue
+                lines = [x.strip() for x in decoded.splitlines() if x.strip()]
+                if lines and any("://" in x for x in lines):
+                    return lines
     return [x.strip() for x in t.splitlines() if x.strip()]
