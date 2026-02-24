@@ -127,6 +127,23 @@ sudo APP_DIR=/data/subconvert-manager bash -c "$(curl -fsSL https://raw.githubus
 sudo REPO_URL=https://github.com/HlONGlin/subconvert-manager.git BRANCH=main bash -c "$(curl -fsSL https://raw.githubusercontent.com/HlONGlin/subconvert-manager/main/quick-install.sh)"
 ```
 
+### 6) 报错：`pip not found in virtualenv`
+
+如果安装日志出现：
+
+`ERROR: pip not found in virtualenv: /opt/subconvert-manager/.venv/bin/pip`
+
+执行下面命令修复后再安装：
+
+```bash
+cd /opt/subconvert-manager
+rm -rf .venv
+python3 -m venv .venv
+.venv/bin/python -m ensurepip --upgrade || true
+.venv/bin/python -m pip install --upgrade pip setuptools wheel
+sudo bash install.sh
+```
+
 ---
 
 ## 常用管理命令

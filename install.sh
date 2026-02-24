@@ -263,23 +263,55 @@ normalize_runtime_secrets() {
 ensure_venv() {
   local py
   py="$(pick_python_bin)"
+  local vpy="$VENV_DIR/bin/python"
 
   if [[ ! -d "$VENV_DIR" ]]; then
     log "Creating virtual environment"
     if ! "$py" -m venv "$VENV_DIR"; then
       "$py" -m virtualenv "$VENV_DIR"
     fi
+    vpy="$VENV_DIR/bin/python"
   fi
+
+  if [[ ! -x "$vpy" ]]; then
+    warn "Virtualenv python not found, recreating venv"
+    rm -rf "$VENV_DIR"
+    if ! "$py" -m venv "$VENV_DIR"; then
+      "$py" -m virtualenv "$VENV_DIR"
+    fi
+    vpy="$VENV_DIR/bin/python"
+  fi
+
+  if ! "$vpy" -m pip --version >/dev/null 2>&1; then
+    log "pip missing in virtualenv, trying ensurepip"
+    "$vpy" -m ensurepip --upgrade >/dev/null 2>&1 || true
+  fi
+
+  if ! "$vpy" -m pip --version >/dev/null 2>&1; then
+    warn "ensurepip failed, recreating venv with virtualenv fallback"
+    rm -rf "$VENV_DIR"
+    if ! "$py" -m venv "$VENV_DIR"; then
+      if has_cmd virtualenv; then
+        virtualenv "$VENV_DIR"
+      else
+        "$py" -m pip install --upgrade virtualenv
+        "$py" -m virtualenv "$VENV_DIR"
+      fi
+    fi
+    vpy="$VENV_DIR/bin/python"
+  fi
+
+  "$vpy" -m pip --version >/dev/null 2>&1 || die "pip is still unavailable in virtualenv: $VENV_DIR"
 }
 
 pip_install_with_retry() {
-  local pip_bin="$1"
+  local py_bin="$1"
   local requirements="$2"
   local max_retry=3
   local n
 
   for n in $(seq 1 "$max_retry"); do
-    if "$pip_bin" install --no-cache-dir -r "$requirements"; then
+    if "$py_bin" -m pip install --no-cache-dir -r "$requirements"; then
       return
     fi
     warn "pip install failed (attempt ${n}/${max_retry})"
@@ -290,12 +322,13 @@ pip_install_with_retry() {
 }
 
 install_python_deps() {
-  local pip_bin="$VENV_DIR/bin/pip"
-  [[ -x "$pip_bin" ]] || die "pip not found in virtualenv: $pip_bin"
+  local py_bin="$VENV_DIR/bin/python"
+  [[ -x "$py_bin" ]] || die "python not found in virtualenv: $py_bin"
+  "$py_bin" -m pip --version >/dev/null 2>&1 || die "pip not available in virtualenv: $VENV_DIR"
 
   log "Installing Python dependencies"
-  "$pip_bin" install --upgrade pip setuptools wheel
-  pip_install_with_retry "$pip_bin" "$APP_DIR/requirements.txt"
+  "$py_bin" -m pip install --upgrade pip setuptools wheel
+  pip_install_with_retry "$py_bin" "$APP_DIR/requirements.txt"
 }
 
 ensure_data_file() {
