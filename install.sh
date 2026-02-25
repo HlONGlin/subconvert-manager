@@ -305,6 +305,26 @@ ensure_venv() {
     vpy="$VENV_DIR/bin/python"
   fi
 
+  if ! "$vpy" -m pip --version >/dev/null 2>&1; then
+    warn "pip still missing after python -m venv, forcing virtualenv recreation"
+    rm -rf "$VENV_DIR"
+
+    if has_cmd virtualenv; then
+      virtualenv "$VENV_DIR" || die "failed to recreate venv via virtualenv"
+    else
+      if ! "$py" -m pip install --upgrade pip virtualenv; then
+        warn "Failed to install virtualenv via $py -m pip, trying system virtualenv if available"
+      fi
+      "$py" -m virtualenv "$VENV_DIR" || die "failed to recreate venv via $py -m virtualenv"
+    fi
+
+    vpy="$VENV_DIR/bin/python"
+  fi
+
+  if [[ ! -x "$VENV_DIR/bin/pip" && -x "$VENV_DIR/bin/pip3" ]]; then
+    ln -sf pip3 "$VENV_DIR/bin/pip" || true
+  fi
+
   "$vpy" -m pip --version >/dev/null 2>&1 || die "pip is still unavailable in virtualenv: $VENV_DIR"
 }
 
