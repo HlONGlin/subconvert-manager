@@ -169,6 +169,8 @@ sudo bash install.sh
 sudo bash uninstall.sh
 ```
 
+> 注意：`uninstall.sh` 现在会删除整个部署目录（含代码、`.venv`、`data/`）。
+
 ## 关键配置
 
 `config.env` 常用项：

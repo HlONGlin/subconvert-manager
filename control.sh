@@ -24,6 +24,8 @@ APP_DIR="$(cd "$(dirname "$SCRIPT_PATH")" 2>/dev/null && pwd || pwd)"
 ENV_FILE="$APP_DIR/config.env"
 SERVICE_NAME="subconvert-manager"
 SERVICE_FILE_SYSTEMD="/etc/systemd/system/${SERVICE_NAME}.service"
+SERVICE_FILE_OPENRC="/etc/init.d/${SERVICE_NAME}"
+SERVICE_FILE_SYSV="/etc/init.d/${SERVICE_NAME}"
 PYTHON_BIN="${PYTHON_BIN:-}"
 REPO_URL="${REPO_URL:-https://github.com/HlONGlin/subconvert-manager.git}"
 BRANCH="${BRANCH:-main}"
@@ -260,6 +262,44 @@ service_status() {
   esac
 }
 
+service_is_running() {
+  case "$SERVICE_MGR" in
+    systemd)
+      systemctl is-active --quiet "$SERVICE_NAME" >/dev/null 2>&1
+      return
+      ;;
+    openrc)
+      rc-service "$SERVICE_NAME" status >/dev/null 2>&1
+      return
+      ;;
+    sysv)
+      service "$SERVICE_NAME" status >/dev/null 2>&1
+      return
+      ;;
+    *)
+      return 2
+      ;;
+  esac
+}
+
+project_status_text() {
+  if service_is_running; then
+    echo "运行中"
+    return
+  fi
+
+  if [[ "$?" -ne 1 ]]; then
+    echo "未知"
+    return
+  fi
+
+  if is_bootstrap_mode; then
+    echo "未部署"
+  else
+    echo "未运行"
+  fi
+}
+
 daemon_reload() {
   case "$SERVICE_MGR" in
     systemd) systemctl daemon-reload ;;
@@ -302,6 +342,32 @@ s = socket.socket()
 s.bind(("", 0))
 print(s.getsockname()[1])
 s.close()
+PY
+}
+
+is_valid_port() {
+  local port="$1"
+  [[ "$port" =~ ^[0-9]+$ ]] || return 1
+  (( port >= 1 && port <= 65535 ))
+}
+
+is_port_available() {
+  local port="$1"
+  local py
+  py="$(pick_python_bin)"
+  "$py" - <<PY
+import socket
+import sys
+
+port = int(${port})
+s = socket.socket()
+try:
+    s.bind(("0.0.0.0", port))
+except OSError:
+    sys.exit(1)
+finally:
+    s.close()
+sys.exit(0)
 PY
 }
 
@@ -389,23 +455,26 @@ show_access_urls() {
 
 show_menu() {
   local bootstrap_mode=0
+  local project_status=""
   if is_bootstrap_mode; then
     bootstrap_mode=1
   fi
+  project_status="$(project_status_text)"
 
   echo "=============================="
   echo " 订阅转换管理器控制器"
+  echo " 当前项目状态：$project_status"
   echo "=============================="
   if [[ "$bootstrap_mode" -eq 1 ]]; then
     echo "1) 部署环境（下载仓库并安装）"
   else
     echo "1) 安装或更新"
   fi
-  echo "2) 卸载服务（保留数据目录）"
+  echo "2) 卸载服务并删除全部下载内容"
   echo "3) 重启服务"
   echo "4) 停止服务"
   echo "5) 查看服务状态与访问地址"
-  echo "6) 切换到随机空闲端口"
+  echo "6) 修改自定义端口"
   echo "7) 仅显示访问地址"
   echo "0) 退出"
   if [[ "$bootstrap_mode" -eq 1 ]]; then
@@ -455,7 +524,21 @@ do_install() {
 
 do_uninstall() {
   require_root
+
+  local confirm=""
+  if ! prompt_choice confirm "确认卸载并删除全部下载内容？此操作不可恢复 [y/N]: "; then
+    warn "未读取到输入，已取消卸载。"
+    return
+  fi
+  confirm="$(printf '%s' "$confirm" | tr '[:upper:]' '[:lower:]')"
+  if [[ "$confirm" != "y" && "$confirm" != "yes" ]]; then
+    echo "已取消卸载。"
+    return
+  fi
+
   bash "$APP_DIR/uninstall.sh"
+  echo "已卸载并删除全部下载内容。"
+  exit 0
 }
 
 do_restart() {
@@ -479,17 +562,47 @@ do_status() {
 do_change_port() {
   require_root
 
-  local new_port
-  new_port="$(auto_port)"
-  set_env_key "PORT" "$new_port"
+  local new_port current_port
+  current_port="$(get_port)"
 
-  if [[ "$SERVICE_MGR" == "systemd" && -f "$SERVICE_FILE_SYSTEMD" ]]; then
-    sed -i -E "s/--port [0-9]+/--port ${new_port}/g" "$SERVICE_FILE_SYSTEMD"
-    daemon_reload
+  if ! prompt_choice new_port "请输入自定义端口（1-65535，0 取消）："; then
+    warn "未读取到输入，已取消修改端口。"
+    return
+  fi
+  new_port="$(printf '%s' "$new_port" | tr -d '[:space:]')"
+
+  if [[ "$new_port" == "0" ]]; then
+    echo "已取消修改端口。"
+    return
+  fi
+  if ! is_valid_port "$new_port"; then
+    warn "无效端口：$new_port。请输入 1-65535 之间的数字。"
+    return
+  fi
+  if [[ "$new_port" == "$current_port" ]]; then
+    echo "端口未变化：$new_port"
+    return
+  fi
+  if ! is_port_available "$new_port"; then
+    warn "端口已被占用：$new_port，请更换端口。"
+    return
   fi
 
+  set_env_key "PORT" "$new_port"
+
+  if [[ -f "$SERVICE_FILE_SYSTEMD" ]]; then
+    sed -i -E "s/--port [0-9]+/--port ${new_port}/g" "$SERVICE_FILE_SYSTEMD"
+  fi
+  if [[ -f "$SERVICE_FILE_OPENRC" ]]; then
+    sed -i -E "s/--port [0-9]+/--port ${new_port}/g" "$SERVICE_FILE_OPENRC"
+  fi
+  if [[ -f "$SERVICE_FILE_SYSV" ]]; then
+    sed -i -E "s/--port [0-9]+/--port ${new_port}/g" "$SERVICE_FILE_SYSV"
+  fi
+  daemon_reload
+
   service_restart
-  echo "已切换到新端口：$new_port"
+  echo "已切换到自定义端口：$new_port"
   show_access_urls
 }
 

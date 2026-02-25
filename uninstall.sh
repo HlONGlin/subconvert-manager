@@ -11,6 +11,7 @@ SERVICE_NAME="subconvert-manager"
 SERVICE_FILE_SYSTEMD="/etc/systemd/system/${SERVICE_NAME}.service"
 SERVICE_FILE_OPENRC="/etc/init.d/${SERVICE_NAME}"
 SERVICE_FILE_SYSV="/etc/init.d/${SERVICE_NAME}"
+REMOVE_APP_DIR="${REMOVE_APP_DIR:-1}"
 
 has_cmd() {
   command -v "$1" >/dev/null 2>&1
@@ -63,5 +64,14 @@ case "$mgr" in
     ;;
 esac
 
-rm -rf "$APP_DIR/.venv"
-echo "Uninstalled service (kept source code and data/)."
+if [[ "$REMOVE_APP_DIR" == "1" ]]; then
+  if [[ -z "$APP_DIR" || "$APP_DIR" == "/" || "$APP_DIR" == "." ]]; then
+    echo "Refusing to remove unsafe APP_DIR: $APP_DIR" >&2
+    exit 1
+  fi
+  rm -rf "$APP_DIR"
+  echo "Uninstalled service and removed all downloaded content: $APP_DIR"
+else
+  rm -rf "$APP_DIR/.venv"
+  echo "Uninstalled service (kept source code and data/)."
+fi
