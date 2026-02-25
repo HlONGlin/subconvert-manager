@@ -2,11 +2,25 @@
 set -Eeuo pipefail
 IFS=$'\n\t'
 
-SCRIPT_PATH="${BASH_SOURCE[0]:-${0:-.}}"
-if [[ "$SCRIPT_PATH" == "bash" || "$SCRIPT_PATH" == "-bash" ]]; then
+resolve_script_path() {
+  if [[ -n "${BASH_SOURCE[0]-}" ]]; then
+    printf '%s\n' "${BASH_SOURCE[0]}"
+    return
+  fi
+
+  if [[ -n "${0-}" ]]; then
+    printf '%s\n' "$0"
+    return
+  fi
+
+  printf '.\n'
+}
+
+SCRIPT_PATH="$(resolve_script_path)"
+if [[ "$SCRIPT_PATH" == "bash" || "$SCRIPT_PATH" == "-bash" || "$SCRIPT_PATH" == "sh" || "$SCRIPT_PATH" == "-sh" ]]; then
   SCRIPT_PATH="."
 fi
-APP_DIR="$(cd "$(dirname "$SCRIPT_PATH")" 2>/dev/null && pwd)"
+APP_DIR="$(cd "$(dirname "$SCRIPT_PATH")" 2>/dev/null && pwd || pwd)"
 ENV_FILE="$APP_DIR/config.env"
 SERVICE_NAME="subconvert-manager"
 SERVICE_FILE_SYSTEMD="/etc/systemd/system/${SERVICE_NAME}.service"
@@ -14,6 +28,7 @@ PYTHON_BIN="${PYTHON_BIN:-}"
 REPO_URL="${REPO_URL:-https://github.com/HlONGlin/subconvert-manager.git}"
 BRANCH="${BRANCH:-main}"
 BOOTSTRAP_DIR="${BOOTSTRAP_DIR:-/opt/subconvert-manager}"
+BOOTSTRAP_FORCE_UPDATE="${BOOTSTRAP_FORCE_UPDATE:-0}"
 
 log() {
   printf '[%s] %s\n' "$(date '+%Y-%m-%d %H:%M:%S')" "$*"
@@ -74,6 +89,43 @@ ensure_git() {
   esac
 }
 
+repo_has_local_changes() {
+  local repo_dir="$1"
+  local status_output=""
+
+  if ! status_output="$(git -C "$repo_dir" status --porcelain 2>/dev/null)"; then
+    return 2
+  fi
+
+  [[ -n "$status_output" ]]
+}
+
+sync_repo_to_origin() {
+  local repo_dir="$1"
+  local backup_env=""
+  local synced=0
+
+  if [[ "$BOOTSTRAP_FORCE_UPDATE" == "1" && -f "$repo_dir/config.env" ]]; then
+    backup_env="$(mktemp 2>/dev/null || true)"
+    if [[ -n "$backup_env" ]]; then
+      cp -f "$repo_dir/config.env" "$backup_env"
+    fi
+  fi
+
+  if git -C "$repo_dir" fetch origin "$BRANCH" && \
+     (git -C "$repo_dir" checkout -f "$BRANCH" || git -C "$repo_dir" checkout -f -B "$BRANCH" "origin/$BRANCH") && \
+     git -C "$repo_dir" reset --hard "origin/$BRANCH"; then
+    synced=1
+  fi
+
+  if [[ -n "$backup_env" && -f "$backup_env" ]]; then
+    cp -f "$backup_env" "$repo_dir/config.env"
+    rm -f "$backup_env"
+  fi
+
+  [[ "$synced" -eq 1 ]]
+}
+
 bootstrap_repo_if_needed() {
   if [[ -f "$APP_DIR/install.sh" && -f "$APP_DIR/uninstall.sh" ]]; then
     return
@@ -87,14 +139,24 @@ bootstrap_repo_if_needed() {
 
   mkdir -p "$(dirname "$BOOTSTRAP_DIR")"
   if [[ -d "$BOOTSTRAP_DIR/.git" ]]; then
-    if [[ -n "$(git -C "$BOOTSTRAP_DIR" status --porcelain 2>/dev/null || true)" ]]; then
-      warn "检测到 $BOOTSTRAP_DIR 有本地修改，已跳过自动更新，直接使用本地版本。"
-      warn "如需强制更新，请先备份数据后手动处理本地改动再执行。"
+    local repo_state=1
+    if repo_has_local_changes "$BOOTSTRAP_DIR"; then
+      repo_state=0
     else
-      if ! git -C "$BOOTSTRAP_DIR" fetch origin "$BRANCH" || \
-         ! git -C "$BOOTSTRAP_DIR" checkout "$BRANCH" || \
-         ! git -C "$BOOTSTRAP_DIR" pull --ff-only origin "$BRANCH"; then
-        warn "仓库自动同步失败，继续使用本地已有版本。"
+      repo_state="$?"
+    fi
+
+    if [[ "$repo_state" -eq 2 ]]; then
+      warn "Unable to inspect repository state for $BOOTSTRAP_DIR, skipping auto-sync and using local copy."
+    elif [[ "$repo_state" -eq 0 && "$BOOTSTRAP_FORCE_UPDATE" != "1" ]]; then
+      warn "Detected local changes in $BOOTSTRAP_DIR, skipping auto-sync and using local copy."
+      warn "To force sync to origin/$BRANCH, run: BOOTSTRAP_FORCE_UPDATE=1 sudo bash control.sh"
+    else
+      if [[ "$repo_state" -eq 0 ]]; then
+        warn "Local changes detected and BOOTSTRAP_FORCE_UPDATE=1 is set, forcing sync to origin/$BRANCH while preserving config.env."
+      fi
+      if ! sync_repo_to_origin "$BOOTSTRAP_DIR"; then
+        warn "Repository auto-sync failed, continuing with the local version."
       fi
     fi
   else
