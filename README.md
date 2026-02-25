@@ -134,15 +134,12 @@ curl -fsSL https://raw.githubusercontent.com/HlONGlin/subconvert-manager/main/co
 
 ### 6) 报错：`Your local changes to the following files would be overwritten by merge`
 
-- 新版 `control.sh` 遇到仓库有本地修改时，会跳过自动更新并继续运行本地版本。
-- 如果你想强制更新，请先备份 `config.env` 和 `data/`，然后执行：
+- 新版 `control.sh` 在“1) 部署环境（下载仓库并安装）”时，必须先同步 `origin/main`。
+- 如果检测到本地代码改动，会提示你是否强制覆盖代码；选择 `y` 时会保留 `config.env` 和 `data/` 后再同步。
+- 你也可以直接手动强制同步后再部署：
 
 ```bash
-cd /opt/subconvert-manager
-git reset --hard
-git clean -fd
-git pull --ff-only
-sudo bash control.sh
+BOOTSTRAP_FORCE_UPDATE=1 sudo bash control.sh
 ```
 
 ### 7) 报错：`pip not found in virtualenv`

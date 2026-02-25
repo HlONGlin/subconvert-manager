@@ -103,12 +103,20 @@ repo_has_local_changes() {
 sync_repo_to_origin() {
   local repo_dir="$1"
   local backup_env=""
+  local backup_data_dir=""
   local synced=0
 
   if [[ "$BOOTSTRAP_FORCE_UPDATE" == "1" && -f "$repo_dir/config.env" ]]; then
     backup_env="$(mktemp 2>/dev/null || true)"
     if [[ -n "$backup_env" ]]; then
       cp -f "$repo_dir/config.env" "$backup_env"
+    fi
+  fi
+
+  if [[ "$BOOTSTRAP_FORCE_UPDATE" == "1" && -d "$repo_dir/data" ]]; then
+    backup_data_dir="$(mktemp -d 2>/dev/null || true)"
+    if [[ -n "$backup_data_dir" && -d "$backup_data_dir" ]]; then
+      cp -a "$repo_dir/data/." "$backup_data_dir/" 2>/dev/null || true
     fi
   fi
 
@@ -121,6 +129,12 @@ sync_repo_to_origin() {
   if [[ -n "$backup_env" && -f "$backup_env" ]]; then
     cp -f "$backup_env" "$repo_dir/config.env"
     rm -f "$backup_env"
+  fi
+
+  if [[ -n "$backup_data_dir" && -d "$backup_data_dir" ]]; then
+    mkdir -p "$repo_dir/data"
+    cp -a "$backup_data_dir/." "$repo_dir/data/" 2>/dev/null || true
+    rm -rf "$backup_data_dir"
   fi
 
   [[ "$synced" -eq 1 ]]
@@ -157,6 +171,7 @@ sync_repo_to_bootstrap_dir() {
   mkdir -p "$(dirname "$BOOTSTRAP_DIR")"
   if [[ -d "$BOOTSTRAP_DIR/.git" ]]; then
     local repo_state=1
+    local force_confirm=""
     if repo_has_local_changes "$BOOTSTRAP_DIR"; then
       repo_state=0
     else
@@ -164,17 +179,28 @@ sync_repo_to_bootstrap_dir() {
     fi
 
     if [[ "$repo_state" -eq 2 ]]; then
-      warn "Unable to inspect repository state for $BOOTSTRAP_DIR, skipping auto-sync and using local copy."
+      die "Unable to inspect repository state for $BOOTSTRAP_DIR, cannot continue deployment."
     elif [[ "$repo_state" -eq 0 && "$BOOTSTRAP_FORCE_UPDATE" != "1" ]]; then
-      warn "Detected local changes in $BOOTSTRAP_DIR, skipping auto-sync and using local copy."
-      warn "To force sync to origin/$BRANCH, run: BOOTSTRAP_FORCE_UPDATE=1 sudo bash control.sh"
-    else
-      if [[ "$repo_state" -eq 0 ]]; then
-        warn "Local changes detected and BOOTSTRAP_FORCE_UPDATE=1 is set, forcing sync to origin/$BRANCH while preserving config.env."
+      warn "Detected local changes in $BOOTSTRAP_DIR."
+      if prompt_choice force_confirm "Force sync from origin/$BRANCH and overwrite local code changes (preserve config.env and data/)? [y/N]: "; then
+        force_confirm="$(printf '%s' "$force_confirm" | tr '[:upper:]' '[:lower:]')"
+      else
+        force_confirm="n"
       fi
-      if ! sync_repo_to_origin "$BOOTSTRAP_DIR"; then
-        warn "Repository auto-sync failed, continuing with the local version."
+
+      if [[ "$force_confirm" == "y" || "$force_confirm" == "yes" ]]; then
+        BOOTSTRAP_FORCE_UPDATE="1"
+        warn "Forcing sync to origin/$BRANCH while preserving config.env and data/."
+      else
+        die "Deployment requires syncing repository. Retry and choose y, or run: BOOTSTRAP_FORCE_UPDATE=1 sudo bash control.sh"
       fi
+    fi
+
+    if [[ "$repo_state" -eq 0 ]]; then
+      warn "Local changes detected and BOOTSTRAP_FORCE_UPDATE=1 is set, forcing sync to origin/$BRANCH while preserving config.env and data/."
+    fi
+    if ! sync_repo_to_origin "$BOOTSTRAP_DIR"; then
+      die "Repository sync failed, deployment aborted."
     fi
   else
     if [[ -e "$BOOTSTRAP_DIR" ]] && [[ -n "$(ls -A "$BOOTSTRAP_DIR" 2>/dev/null || true)" ]]; then
