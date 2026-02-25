@@ -607,6 +607,11 @@ do_change_port() {
 }
 
 main() {
+  if is_bootstrap_mode && is_repo_ready "$BOOTSTRAP_DIR"; then
+    log "检测到已部署目录，切换到本地控制器：$BOOTSTRAP_DIR/control.sh"
+    exec bash "$BOOTSTRAP_DIR/control.sh" "$@"
+  fi
+
   while true; do
     show_menu
     if ! prompt_choice choice "请选择操作："; then
