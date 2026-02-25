@@ -356,14 +356,29 @@ detect_public_ip() {
   fi
 }
 
+pick_access_url() {
+  local port="$1"
+  local local_ip="$2"
+  local public_ip="$3"
+
+  if [[ -n "$public_ip" && "$public_ip" != "$local_ip" ]]; then
+    echo "http://${public_ip}:${port}/"
+    return
+  fi
+
+  echo "http://${local_ip}:${port}/"
+}
+
 show_access_urls() {
-  local port local_ip public_ip
+  local port local_ip public_ip access_url
   port="$(get_port)"
   local_ip="$(detect_local_ip)"
   public_ip="$(detect_public_ip || true)"
+  access_url="$(pick_access_url "$port" "$local_ip" "$public_ip")"
 
   echo "----------------------------------------"
   echo "端口：$port"
+  echo "地址：$access_url"
   echo "内网地址：http://${local_ip}:${port}/"
   if [[ -n "$public_ip" && "$public_ip" != "$local_ip" ]]; then
     echo "公网地址：http://${public_ip}:${port}/"

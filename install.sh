@@ -566,16 +566,31 @@ detect_public_ip() {
   curl -fsS --max-time 3 https://api.ipify.org 2>/dev/null || true
 }
 
+pick_access_url() {
+  local local_ip="$1"
+  local public_ip="$2"
+  local port="$3"
+
+  if [[ -n "$public_ip" && "$public_ip" != "$local_ip" ]]; then
+    echo "http://${public_ip}:${port}/"
+    return
+  fi
+
+  echo "http://${local_ip}:${port}/"
+}
+
 print_summary() {
   local port="$1"
   local mgr="$2"
-  local local_ip public_ip
+  local local_ip public_ip access_url
   local_ip="$(detect_local_ip)"
   public_ip="$(detect_public_ip)"
+  access_url="$(pick_access_url "$local_ip" "$public_ip" "$port")"
 
   log "Install finished"
   log "Service manager: $mgr"
   log "Service name: $SERVICE_NAME"
+  log "地址：$access_url"
   log "Local URL: http://${local_ip}:${port}/"
   if [[ -n "$public_ip" && "$public_ip" != "$local_ip" ]]; then
     log "Public URL: http://${public_ip}:${port}/"
