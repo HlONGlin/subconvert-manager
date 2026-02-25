@@ -173,7 +173,6 @@ sync_repo_to_bootstrap_dir() {
   mkdir -p "$(dirname "$BOOTSTRAP_DIR")"
   if [[ -d "$BOOTSTRAP_DIR/.git" ]]; then
     local repo_state=1
-    local force_confirm=""
     if repo_has_local_changes "$BOOTSTRAP_DIR"; then
       repo_state=0
     else
@@ -184,18 +183,8 @@ sync_repo_to_bootstrap_dir() {
       die "Unable to inspect repository state for $BOOTSTRAP_DIR, cannot continue deployment."
     elif [[ "$repo_state" -eq 0 && "$BOOTSTRAP_FORCE_UPDATE" != "1" ]]; then
       warn "Detected local changes in $BOOTSTRAP_DIR."
-      if prompt_choice force_confirm "Force sync from origin/$BRANCH and overwrite local code changes (preserve config.env and data/)? [y/N]: "; then
-        force_confirm="$(printf '%s' "$force_confirm" | tr '[:upper:]' '[:lower:]')"
-      else
-        force_confirm="n"
-      fi
-
-      if [[ "$force_confirm" == "y" || "$force_confirm" == "yes" ]]; then
-        BOOTSTRAP_FORCE_UPDATE="1"
-        warn "Forcing sync to origin/$BRANCH while preserving config.env and data/."
-      else
-        die "Deployment requires syncing repository. Retry and choose y, or run: BOOTSTRAP_FORCE_UPDATE=1 sudo bash control.sh"
-      fi
+      BOOTSTRAP_FORCE_UPDATE="1"
+      warn "Auto-confirmed force sync to origin/$BRANCH while preserving config.env and data/."
     fi
 
     if [[ "$repo_state" -eq 0 ]]; then

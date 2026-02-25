@@ -135,7 +135,7 @@ curl -fsSL https://raw.githubusercontent.com/HlONGlin/subconvert-manager/main/co
 ### 6) 报错：`Your local changes to the following files would be overwritten by merge`
 
 - 新版 `control.sh` 在“1) 部署环境（下载仓库并安装）”时，必须先同步 `origin/main`。
-- 如果检测到本地代码改动，会提示你是否强制覆盖代码；选择 `y` 时会保留 `config.env` 和 `data/` 后再同步。
+- 如果检测到本地代码改动，会自动强制覆盖代码，并保留 `config.env` 和 `data/` 后再同步。
 - 你也可以直接手动强制同步后再部署：
 
 ```bash
