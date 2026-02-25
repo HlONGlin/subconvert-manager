@@ -30,7 +30,7 @@
 
 
 ```bash
-sudo bash -c "$(curl -fsSL https://raw.githubusercontent.com/HlONGlin/subconvert-manager/main/control.sh)"
+curl -fsSL https://raw.githubusercontent.com/HlONGlin/subconvert-manager/main/control.sh | sudo bash
 ```
 
 这个命令会：
@@ -117,16 +117,29 @@ sudo bash install.sh
 一键命令可带环境变量：
 
 ```bash
-sudo BOOTSTRAP_DIR=/data/subconvert-manager bash -c "$(curl -fsSL https://raw.githubusercontent.com/HlONGlin/subconvert-manager/main/control.sh)"
+curl -fsSL https://raw.githubusercontent.com/HlONGlin/subconvert-manager/main/control.sh | sudo env BOOTSTRAP_DIR=/data/subconvert-manager bash
 ```
 
 ### 5) 想固定分支或私有仓库地址
 
 ```bash
-sudo REPO_URL=https://github.com/HlONGlin/subconvert-manager.git BRANCH=main bash -c "$(curl -fsSL https://raw.githubusercontent.com/HlONGlin/subconvert-manager/main/control.sh)"
+curl -fsSL https://raw.githubusercontent.com/HlONGlin/subconvert-manager/main/control.sh | sudo env REPO_URL=https://github.com/HlONGlin/subconvert-manager.git BRANCH=main bash
 ```
 
-### 6) 报错：`pip not found in virtualenv`
+### 6) 报错：`Your local changes to the following files would be overwritten by merge`
+
+- 新版 `control.sh` 遇到仓库有本地修改时，会跳过自动更新并继续运行本地版本。
+- 如果你想强制更新，请先备份 `config.env` 和 `data/`，然后执行：
+
+```bash
+cd /opt/subconvert-manager
+git reset --hard
+git clean -fd
+git pull --ff-only
+sudo bash control.sh
+```
+
+### 7) 报错：`pip not found in virtualenv`
 
 如果安装日志出现：
 

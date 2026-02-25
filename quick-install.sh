@@ -26,7 +26,7 @@ has_cmd() {
 
 require_root() {
   if [[ "${EUID:-$(id -u)}" -ne 0 ]]; then
-    die "Please run as root. Example: sudo bash -c \"\$(curl -fsSL https://raw.githubusercontent.com/HlONGlin/subconvert-manager/main/quick-install.sh)\""
+    die "Please run as root. Example: curl -fsSL https://raw.githubusercontent.com/HlONGlin/subconvert-manager/main/quick-install.sh | sudo bash"
   fi
 }
 
@@ -68,10 +68,17 @@ sync_repo() {
   mkdir -p "$(dirname "$APP_DIR")"
 
   if [[ -d "$APP_DIR/.git" ]]; then
+    if [[ -n "$(git -C "$APP_DIR" status --porcelain 2>/dev/null || true)" ]]; then
+      warn "Repository has local changes, skip auto-update and keep current local version."
+      return
+    fi
+
     log "Repository exists, pulling latest from $BRANCH"
-    git -C "$APP_DIR" fetch origin "$BRANCH"
-    git -C "$APP_DIR" checkout "$BRANCH"
-    git -C "$APP_DIR" pull --ff-only origin "$BRANCH"
+    if ! git -C "$APP_DIR" fetch origin "$BRANCH" || \
+       ! git -C "$APP_DIR" checkout "$BRANCH" || \
+       ! git -C "$APP_DIR" pull --ff-only origin "$BRANCH"; then
+      warn "Failed to update repository automatically, continue with current local version."
+    fi
     return
   fi
 

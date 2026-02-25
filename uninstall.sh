@@ -2,7 +2,11 @@
 set -Eeuo pipefail
 IFS=$'\n\t'
 
-APP_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+SCRIPT_PATH="${BASH_SOURCE[0]:-${0:-.}}"
+if [[ "$SCRIPT_PATH" == "bash" || "$SCRIPT_PATH" == "-bash" ]]; then
+  SCRIPT_PATH="."
+fi
+APP_DIR="$(cd "$(dirname "$SCRIPT_PATH")" 2>/dev/null && pwd)"
 SERVICE_NAME="subconvert-manager"
 SERVICE_FILE_SYSTEMD="/etc/systemd/system/${SERVICE_NAME}.service"
 SERVICE_FILE_OPENRC="/etc/init.d/${SERVICE_NAME}"

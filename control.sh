@@ -2,7 +2,11 @@
 set -Eeuo pipefail
 IFS=$'\n\t'
 
-APP_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+SCRIPT_PATH="${BASH_SOURCE[0]:-${0:-.}}"
+if [[ "$SCRIPT_PATH" == "bash" || "$SCRIPT_PATH" == "-bash" ]]; then
+  SCRIPT_PATH="."
+fi
+APP_DIR="$(cd "$(dirname "$SCRIPT_PATH")" 2>/dev/null && pwd)"
 ENV_FILE="$APP_DIR/config.env"
 SERVICE_NAME="subconvert-manager"
 SERVICE_FILE_SYSTEMD="/etc/systemd/system/${SERVICE_NAME}.service"
@@ -83,9 +87,16 @@ bootstrap_repo_if_needed() {
 
   mkdir -p "$(dirname "$BOOTSTRAP_DIR")"
   if [[ -d "$BOOTSTRAP_DIR/.git" ]]; then
-    git -C "$BOOTSTRAP_DIR" fetch origin "$BRANCH"
-    git -C "$BOOTSTRAP_DIR" checkout "$BRANCH"
-    git -C "$BOOTSTRAP_DIR" pull --ff-only origin "$BRANCH"
+    if [[ -n "$(git -C "$BOOTSTRAP_DIR" status --porcelain 2>/dev/null || true)" ]]; then
+      warn "检测到 $BOOTSTRAP_DIR 有本地修改，已跳过自动更新，直接使用本地版本。"
+      warn "如需强制更新，请先备份数据后手动处理本地改动再执行。"
+    else
+      if ! git -C "$BOOTSTRAP_DIR" fetch origin "$BRANCH" || \
+         ! git -C "$BOOTSTRAP_DIR" checkout "$BRANCH" || \
+         ! git -C "$BOOTSTRAP_DIR" pull --ff-only origin "$BRANCH"; then
+        warn "仓库自动同步失败，继续使用本地已有版本。"
+      fi
+    fi
   else
     if [[ -e "$BOOTSTRAP_DIR" ]] && [[ -n "$(ls -A "$BOOTSTRAP_DIR" 2>/dev/null || true)" ]]; then
       die "引导目标目录非空：$BOOTSTRAP_DIR"
@@ -248,8 +259,6 @@ show_access_urls() {
   public_ip="$(detect_public_ip || true)"
 
   echo "----------------------------------------"
-  echo "服务管理器：$SERVICE_MGR"
-  echo "系统信息：$(detect_os)"
   echo "端口：$port"
   echo "内网地址：http://${local_ip}:${port}/"
   if [[ -n "$public_ip" && "$public_ip" != "$local_ip" ]]; then
@@ -261,10 +270,10 @@ show_access_urls() {
 
 show_menu() {
   echo "=============================="
-  echo " SubConvert Manager 控制器"
+  echo " 订阅转换管理器控制器"
   echo "=============================="
   echo "1) 安装或更新"
-  echo "2) 卸载服务（保留 data/）"
+  echo "2) 卸载服务（保留数据目录）"
   echo "3) 重启服务"
   echo "4) 停止服务"
   echo "5) 查看服务状态与访问地址"
