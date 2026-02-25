@@ -347,10 +347,19 @@ show_access_urls() {
 }
 
 show_menu() {
+  local bootstrap_mode=0
+  if is_bootstrap_mode; then
+    bootstrap_mode=1
+  fi
+
   echo "=============================="
   echo " 订阅转换管理器控制器"
   echo "=============================="
-  echo "1) 安装或更新"
+  if [[ "$bootstrap_mode" -eq 1 ]]; then
+    echo "1) 部署环境（下载仓库并安装）"
+  else
+    echo "1) 安装或更新"
+  fi
   echo "2) 卸载服务（保留数据目录）"
   echo "3) 重启服务"
   echo "4) 停止服务"
@@ -358,11 +367,47 @@ show_menu() {
   echo "6) 切换到随机空闲端口"
   echo "7) 仅显示访问地址"
   echo "0) 退出"
+  if [[ "$bootstrap_mode" -eq 1 ]]; then
+    echo "提示：首次运行请先选择 1)，部署完成后会自动进入完整控制菜单。"
+  fi
   echo "------------------------------"
+}
+
+prompt_choice() {
+  local __var_name="$1"
+  local prompt="$2"
+  local input=""
+
+  if [[ -r /dev/tty ]]; then
+    if ! read -r -p "$prompt" input </dev/tty; then
+      return 1
+    fi
+  else
+    if ! read -r -p "$prompt" input; then
+      return 1
+    fi
+  fi
+
+  printf -v "$__var_name" '%s' "$input"
+}
+
+require_deployed_env() {
+  if is_bootstrap_mode; then
+    warn "当前是引导模式，请先选择 1) 部署环境（下载仓库并安装）。"
+    return 1
+  fi
+  return 0
 }
 
 do_install() {
   require_root
+
+  if is_bootstrap_mode; then
+    sync_repo_to_bootstrap_dir
+    bash "$BOOTSTRAP_DIR/install.sh"
+    exec bash "$BOOTSTRAP_DIR/control.sh"
+  fi
+
   bash "$APP_DIR/install.sh"
   show_access_urls
 }
@@ -407,54 +452,45 @@ do_change_port() {
   show_access_urls
 }
 
-show_bootstrap_menu() {
-  echo "=============================="
-  echo " 订阅转换管理器引导菜单 "
-  echo "=============================="
-  echo "1) 一键安装（下载仓库并部署）"
-  echo "2) 同步仓库并打开控制器"
-  echo "0) 退出"
-  echo "------------------------------"
-}
-
-run_bootstrap_menu() {
-  while true; do
-    show_bootstrap_menu
-    read -r -p "请选择操作：" choice
-    case "$choice" in
-      1)
-        sync_repo_to_bootstrap_dir
-        bash "$BOOTSTRAP_DIR/install.sh"
-        exec bash "$BOOTSTRAP_DIR/control.sh"
-        ;;
-      2)
-        sync_repo_to_bootstrap_dir
-        exec bash "$BOOTSTRAP_DIR/control.sh"
-        ;;
-      0) exit 0 ;;
-      *) echo "无效选项，请重新输入。" ;;
-    esac
-    echo
-  done
-}
-
 main() {
-  if is_bootstrap_mode; then
-    run_bootstrap_menu
-    return
-  fi
-
   while true; do
     show_menu
-    read -r -p "请选择操作：" choice
+    if ! prompt_choice choice "请选择操作："; then
+      warn "未读取到输入，请在交互式终端中运行控制脚本。"
+      exit 1
+    fi
     case "$choice" in
       1) do_install ;;
-      2) do_uninstall ;;
-      3) do_restart ;;
-      4) do_stop ;;
-      5) do_status ;;
-      6) do_change_port ;;
-      7) show_access_urls ;;
+      2)
+        if require_deployed_env; then
+          do_uninstall
+        fi
+        ;;
+      3)
+        if require_deployed_env; then
+          do_restart
+        fi
+        ;;
+      4)
+        if require_deployed_env; then
+          do_stop
+        fi
+        ;;
+      5)
+        if require_deployed_env; then
+          do_status
+        fi
+        ;;
+      6)
+        if require_deployed_env; then
+          do_change_port
+        fi
+        ;;
+      7)
+        if require_deployed_env; then
+          show_access_urls
+        fi
+        ;;
       0) exit 0 ;;
       *) echo "无效选项，请重新输入。" ;;
     esac
