@@ -126,20 +126,33 @@ sync_repo_to_origin() {
   [[ "$synced" -eq 1 ]]
 }
 
-bootstrap_repo_if_needed() {
-  local app_dir_real boot_dir_real
-  app_dir_real="$(cd "$APP_DIR" 2>/dev/null && pwd || echo "$APP_DIR")"
-  boot_dir_real="$(cd "$BOOTSTRAP_DIR" 2>/dev/null && pwd || echo "$BOOTSTRAP_DIR")"
+is_repo_ready() {
+  local repo_dir="$1"
+  [[ -f "$repo_dir/control.sh" && -f "$repo_dir/install.sh" && -f "$repo_dir/uninstall.sh" ]]
+}
 
-  if [[ "$app_dir_real" == "$boot_dir_real" && -f "$APP_DIR/install.sh" && -f "$APP_DIR/uninstall.sh" ]]; then
-    return
+is_bootstrap_mode() {
+  local app_dir_real boot_dir_real
+  app_dir_real="$(cd "${APP_DIR}" 2>/dev/null && pwd || echo "${APP_DIR}")"
+  boot_dir_real="$(cd "${BOOTSTRAP_DIR}" 2>/dev/null && pwd || echo "${BOOTSTRAP_DIR}")"
+
+  if [[ "$app_dir_real" != "$boot_dir_real" ]]; then
+    return 0
   fi
 
+  if ! is_repo_ready "$APP_DIR"; then
+    return 0
+  fi
+
+  return 1
+}
+
+sync_repo_to_bootstrap_dir() {
   require_root
   ensure_git
 
-  log "引导模式：优先使用本地仓库目录 $BOOTSTRAP_DIR"
-  log "正在同步仓库到 $BOOTSTRAP_DIR（分支：$BRANCH）"
+  log "Bootstrap mode: using repository directory $BOOTSTRAP_DIR"
+  log "Syncing repository to $BOOTSTRAP_DIR (branch: $BRANCH)"
 
   mkdir -p "$(dirname "$BOOTSTRAP_DIR")"
   if [[ -d "$BOOTSTRAP_DIR/.git" ]]; then
@@ -165,13 +178,12 @@ bootstrap_repo_if_needed() {
     fi
   else
     if [[ -e "$BOOTSTRAP_DIR" ]] && [[ -n "$(ls -A "$BOOTSTRAP_DIR" 2>/dev/null || true)" ]]; then
-      die "引导目标目录非空：$BOOTSTRAP_DIR"
+      die "Bootstrap target directory is not empty: $BOOTSTRAP_DIR"
     fi
     git clone --depth 1 -b "$BRANCH" "$REPO_URL" "$BOOTSTRAP_DIR"
   fi
 
   chmod +x "$BOOTSTRAP_DIR/control.sh" "$BOOTSTRAP_DIR/install.sh" "$BOOTSTRAP_DIR/uninstall.sh" || true
-  exec bash "$BOOTSTRAP_DIR/control.sh" "$@"
 }
 
 detect_service_mgr() {
@@ -395,7 +407,43 @@ do_change_port() {
   show_access_urls
 }
 
+show_bootstrap_menu() {
+  echo "=============================="
+  echo " 订阅转换管理器引导菜单 "
+  echo "=============================="
+  echo "1) 一键安装（下载仓库并部署）"
+  echo "2) 同步仓库并打开控制器"
+  echo "0) 退出"
+  echo "------------------------------"
+}
+
+run_bootstrap_menu() {
+  while true; do
+    show_bootstrap_menu
+    read -r -p "请选择操作：" choice
+    case "$choice" in
+      1)
+        sync_repo_to_bootstrap_dir
+        bash "$BOOTSTRAP_DIR/install.sh"
+        exec bash "$BOOTSTRAP_DIR/control.sh"
+        ;;
+      2)
+        sync_repo_to_bootstrap_dir
+        exec bash "$BOOTSTRAP_DIR/control.sh"
+        ;;
+      0) exit 0 ;;
+      *) echo "无效选项，请重新输入。" ;;
+    esac
+    echo
+  done
+}
+
 main() {
+  if is_bootstrap_mode; then
+    run_bootstrap_menu
+    return
+  fi
+
   while true; do
     show_menu
     read -r -p "请选择操作：" choice
@@ -414,5 +462,4 @@ main() {
   done
 }
 
-bootstrap_repo_if_needed "$@"
 main "$@"

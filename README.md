@@ -33,6 +33,12 @@
 curl -fsSL https://raw.githubusercontent.com/HlONGlin/subconvert-manager/main/control.sh | sudo bash
 ```
 
+使用流程（新版控制器）：
+
+1. 先打开引导菜单界面
+2. 选择 `1) 一键安装（下载仓库并部署）`
+3. 自动下载完整仓库并完成部署，然后进入完整控制菜单
+
 这个命令会：
 
 - 自动拉取仓库到 `/opt/subconvert-manager`
