@@ -465,7 +465,11 @@
 
   function initCopyTrigger() {
     document.addEventListener("click", function (event) {
-      var btn = event.target.closest("[data-copy]");
+      if (!(event.target instanceof Element)) {
+        return;
+      }
+
+      var btn = event.target.closest("[data-copy],[data-copy-text]");
       if (!btn) {
         return;
       }

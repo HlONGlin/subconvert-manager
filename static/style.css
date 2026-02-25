@@ -40,6 +40,10 @@ body {
     var(--bg);
 }
 
+[hidden] {
+  display: none !important;
+}
+
 body.density-compact {
   --gap: 10px;
   --card-pad: 12px;
