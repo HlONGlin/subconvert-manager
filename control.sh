@@ -127,14 +127,18 @@ sync_repo_to_origin() {
 }
 
 bootstrap_repo_if_needed() {
-  if [[ -f "$APP_DIR/install.sh" && -f "$APP_DIR/uninstall.sh" ]]; then
+  local app_dir_real boot_dir_real
+  app_dir_real="$(cd "$APP_DIR" 2>/dev/null && pwd || echo "$APP_DIR")"
+  boot_dir_real="$(cd "$BOOTSTRAP_DIR" 2>/dev/null && pwd || echo "$BOOTSTRAP_DIR")"
+
+  if [[ "$app_dir_real" == "$boot_dir_real" && -f "$APP_DIR/install.sh" && -f "$APP_DIR/uninstall.sh" ]]; then
     return
   fi
 
   require_root
   ensure_git
 
-  log "引导模式：当前路径不是完整项目目录"
+  log "引导模式：优先使用本地仓库目录 $BOOTSTRAP_DIR"
   log "正在同步仓库到 $BOOTSTRAP_DIR（分支：$BRANCH）"
 
   mkdir -p "$(dirname "$BOOTSTRAP_DIR")"
