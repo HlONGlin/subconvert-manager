@@ -171,42 +171,6 @@ sudo bash uninstall.sh
 
 > 注意：`uninstall.sh` 现在会删除整个部署目录（含代码、`.venv`、`data/`）。
 
-## FRPS/FRPC 一键部署（Token 严密连接）
-
-### 1) 先生成一键部署命令（本地执行）
-
-```bash
-bash frp-deploy-link.sh
-```
-
-可选：你也可以自定义参数后再生成：
-
-```bash
-FRPS_SERVER_ADDR=154.40.59.211 FRPC_LOCAL_PORT=3000 FRPC_REMOTE_PORT=6000 bash frp-deploy-link.sh
-```
-
-### 2) 服务器部署 FRPS（复制生成结果里的 FRPS 命令）
-
-示例（直接 `curl | bash`）：
-
-```bash
-curl -fsSL https://raw.githubusercontent.com/HlONGlin/subconvert-manager/main/frps-install.sh | sudo env FRP_TOKEN=<TOKEN> FRPS_BIND_PORT=7000 FRPS_DASHBOARD_PORT=7500 bash
-```
-
-### 3) 站点服务器部署 FRPC（复制生成结果里的 FRPC 命令）
-
-示例（直接 `curl | bash`）：
-
-```bash
-curl -fsSL https://raw.githubusercontent.com/HlONGlin/subconvert-manager/main/frpc-install.sh | sudo env FRPS_SERVER_ADDR=<FRPS_IP> FRPS_SERVER_PORT=7000 FRP_TOKEN=<TOKEN> FRPC_LOCAL_PORT=3000 FRPC_REMOTE_PORT=6000 bash
-```
-
-### 4) 核心原则
-
-- `FRP_TOKEN` 必须在 FRPS/FRPC 两端完全一致。
-- 建议每次重建环境都重新生成 token。
-- 不要在公开渠道暴露 token。
-
 ## 关键配置
 
 `config.env` 常用项：
