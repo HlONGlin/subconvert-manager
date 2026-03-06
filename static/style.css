@@ -473,7 +473,7 @@ input.is-loading::after {
 
 .link-row {
   display: grid;
-  grid-template-columns: 96px 1fr auto;
+  grid-template-columns: 1fr auto;
   gap: 8px;
   align-items: center;
 }

@@ -16,12 +16,6 @@
       <div class="top-actions">
         <a class="btn primary" href="/convert" aria-label="在线转换">在线转换</a>
         <a class="btn" href="/sources/new" aria-label="新增订阅源">新增订阅源</a>
-        <form action="/security/suffix/rotate" method="post" data-lock-submit data-confirm="确认更新安全后缀？旧公共链接将失效。">
-          <button class="btn" type="submit" aria-label="更新安全后缀">更新后缀</button>
-        </form>
-        <form action="/admin/update_from_github" method="post" data-lock-submit data-confirm="确认从 GitHub 拉取最新版本？">
-          <button class="btn" type="submit" aria-label="更新网站版本">更新版本</button>
-        </form>
         <button class="btn" type="button" data-density-toggle aria-label="切换页面密度">
           <span data-density-label>切换为紧凑</span>
         </button>
@@ -181,17 +175,14 @@
                   <div class="link-stack mono">
                     <div class="link-row">
                       <strong>V2Ray b64</strong>
-                      <a class="truncate" href="{{ u_v2ray }}" title="{{ u_v2ray }}">{{ u_v2ray }}</a>
                       <button class="btn ghost" type="button" data-copy-text="{{ u_v2ray }}" aria-label="复制 V2Ray b64 链接">复制</button>
                     </div>
                     <div class="link-row">
                       <strong>V2Ray raw</strong>
-                      <a class="truncate" href="{{ u_v2ray_raw }}" title="{{ u_v2ray_raw }}">{{ u_v2ray_raw }}</a>
                       <button class="btn ghost" type="button" data-copy-text="{{ u_v2ray_raw }}" aria-label="复制 V2Ray raw 链接">复制</button>
                     </div>
                     <div class="link-row">
                       <strong>Clash play</strong>
-                      <a class="truncate" href="{{ u_clash_play }}" title="{{ u_clash_play }}">{{ u_clash_play }}</a>
                       <button class="btn ghost" type="button" data-copy-text="{{ u_clash_play }}" aria-label="复制 Clash play 链接">复制</button>
                     </div>
                   </div>

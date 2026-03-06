@@ -182,6 +182,28 @@ get_env_key() {
   grep -E "^${key}=" "$ENV_FILE" | head -n1 | cut -d= -f2- | tr -d '\r' | xargs || true
 }
 
+apply_install_port_override() {
+  local override="${INSTALL_PORT_OVERRIDE:-}"
+  override="$(printf '%s' "$override" | tr -d '[:space:]')"
+
+  if [[ -z "$override" ]]; then
+    return
+  fi
+
+  if [[ "$override" == "auto" ]]; then
+    set_env_key "PORT" "auto"
+    log "PORT 设置为自动随机端口"
+    return
+  fi
+
+  if [[ ! "$override" =~ ^[0-9]+$ ]] || (( override < 1 || override > 65535 )); then
+    die "INSTALL_PORT_OVERRIDE 无效：$override"
+  fi
+
+  set_env_key "PORT" "$override"
+  log "PORT 已设置为：$override"
+}
+
 gen_secret() {
   local py
   py="$(pick_python_bin)"
@@ -609,6 +631,7 @@ main() {
 
   install_system_packages
   ensure_env_file
+  apply_install_port_override
   normalize_runtime_secrets
 
   cd "$APP_DIR"

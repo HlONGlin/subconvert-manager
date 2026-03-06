@@ -224,7 +224,15 @@ check_repo_remote_update() {
     return 1
   fi
 
-  return 0
+  if git -C "$repo_dir" merge-base --is-ancestor "$local_head" "$remote_head" >/dev/null 2>&1; then
+    return 0
+  fi
+
+  if git -C "$repo_dir" merge-base --is-ancestor "$remote_head" "$local_head" >/dev/null 2>&1; then
+    return 1
+  fi
+
+  return 2
 }
 
 bootstrap_handoff_with_update_check() {
@@ -237,7 +245,10 @@ bootstrap_handoff_with_update_check() {
   local update_state=0
 
   log "检查 GitHub 仓库是否有更新（分支：$branch）..."
-  if check_repo_remote_update "$BOOTSTRAP_DIR" "$branch"; then
+  check_repo_remote_update "$BOOTSTRAP_DIR" "$branch"
+  update_state=$?
+
+  if [[ "$update_state" -eq 0 ]]; then
     log "检测到新版本，准备同步本地版本。"
 
     if repo_has_local_changes "$BOOTSTRAP_DIR"; then
@@ -255,7 +266,6 @@ bootstrap_handoff_with_update_check() {
     return
   fi
 
-  update_state=$?
   if [[ "$update_state" -eq 1 ]]; then
     log "GitHub 无更新，调用本地版本。"
   else
@@ -486,10 +496,15 @@ pick_access_url() {
 
 show_access_urls() {
   local port local_ip public_ip access_url
+  local url_suffix=""
+  local sub_token=""
+  local suffix_param=""
   port="$(get_port)"
   local_ip="$(detect_local_ip)"
   public_ip="$(detect_public_ip || true)"
   access_url="$(pick_access_url "$port" "$local_ip" "$public_ip")"
+  url_suffix="$(get_env_key URL_SUFFIX)"
+  sub_token="$(get_env_key SUB_TOKEN)"
 
   echo "----------------------------------------"
   echo "端口：$port"
@@ -499,6 +514,21 @@ show_access_urls() {
     echo "公网地址：http://${public_ip}:${port}/"
   fi
   echo "首次初始化页面：http://${local_ip}:${port}/setup"
+
+  if [[ -n "$sub_token" ]]; then
+    if [[ -n "$url_suffix" ]]; then
+      suffix_param="&suffix=${url_suffix}"
+      echo "安全后缀：${url_suffix}"
+      echo "后缀使用方式：通过查询参数 suffix=${url_suffix}（不是路径）。"
+    else
+      echo "安全后缀：未设置"
+    fi
+    echo "订阅示例（请将 <sid> 替换为你的订阅ID）："
+    echo "${access_url}pub/s/<sid>/v2ray?token=${sub_token}${suffix_param}"
+  else
+    echo "提示：SUB_TOKEN 未设置，公共订阅链接暂不可用。"
+  fi
+
   echo "----------------------------------------"
 }
 
@@ -552,6 +582,36 @@ prompt_choice() {
   printf -v "$__var_name" '%s' "$input"
 }
 
+prompt_install_port_choice() {
+  local __var_name="$1"
+  local input_port=""
+  local current_port=""
+
+  if ! prompt_choice input_port "安装/更新端口（1-65535，回车=随机端口）："; then
+    warn "未读取到输入，已取消安装/更新。"
+    return 1
+  fi
+
+  input_port="$(printf '%s' "$input_port" | tr -d '[:space:]')"
+  if [[ -z "$input_port" ]]; then
+    printf -v "$__var_name" '%s' "auto"
+    return 0
+  fi
+
+  if ! is_valid_port "$input_port"; then
+    warn "无效端口：$input_port。请输入 1-65535，或直接回车使用随机端口。"
+    return 1
+  fi
+
+  current_port="$(get_port)"
+  if [[ "$input_port" != "$current_port" ]] && ! is_port_available "$input_port"; then
+    warn "端口已被占用：$input_port，请更换端口。"
+    return 1
+  fi
+
+  printf -v "$__var_name" '%s' "$input_port"
+}
+
 require_deployed_env() {
   if is_bootstrap_mode; then
     warn "当前是引导模式，请先选择 1) 部署环境（下载仓库并安装）。"
@@ -562,14 +622,25 @@ require_deployed_env() {
 
 do_install() {
   require_root
+  local install_port=""
+
+  if ! prompt_install_port_choice install_port; then
+    return
+  fi
+
+  if [[ "$install_port" == "auto" ]]; then
+    log "未指定端口，将自动选择随机端口。"
+  else
+    log "使用端口：$install_port"
+  fi
 
   if is_bootstrap_mode; then
     sync_repo_to_bootstrap_dir
-    bash "$BOOTSTRAP_DIR/install.sh"
+    INSTALL_PORT_OVERRIDE="$install_port" bash "$BOOTSTRAP_DIR/install.sh"
     exec bash "$BOOTSTRAP_DIR/control.sh"
   fi
 
-  bash "$APP_DIR/install.sh"
+  INSTALL_PORT_OVERRIDE="$install_port" bash "$APP_DIR/install.sh"
   show_access_urls
 }
 
@@ -669,8 +740,9 @@ do_update_from_github() {
   local update_state=0
 
   log "检查 GitHub 是否有更新（分支：$branch）..."
-  if ! check_repo_remote_update "$APP_DIR" "$branch"; then
-    update_state=$?
+  check_repo_remote_update "$APP_DIR" "$branch"
+  update_state=$?
+  if [[ "$update_state" -ne 0 ]]; then
     if [[ "$update_state" -eq 1 ]]; then
       echo "当前已是最新版本，无需更新。"
       return
@@ -707,17 +779,26 @@ do_update_from_github() {
 
 is_valid_url_suffix() {
   local suffix="$1"
-  [[ "$suffix" =~ ^[A-Za-z0-9_-]{4,64}$ ]]
+  [[ "$suffix" =~ ^[A-Za-z0-9_-]{3,5}$ ]]
 }
 
 generate_random_suffix() {
   local random_suffix=""
-  random_suffix="$(tr -dc 'A-Za-z0-9' </dev/urandom 2>/dev/null | head -c 16 || true)"
+  local target_len=3
+  target_len=$((RANDOM % 3 + 3))
+
+  random_suffix="$(tr -dc 'A-Za-z0-9' </dev/urandom 2>/dev/null | head -c "$target_len" || true)"
   if [[ -z "$random_suffix" ]]; then
-    random_suffix="$(date +%s%N | sha256sum 2>/dev/null | awk '{print $1}' | cut -c1-16 || true)"
+    random_suffix="$(date +%s%N | sha256sum 2>/dev/null | awk '{print $1}' | cut -c1-5 || true)"
   fi
   if [[ -z "$random_suffix" ]]; then
-    random_suffix="suffix$(date +%s)"
+    random_suffix="abc"
+  fi
+  if [[ ${#random_suffix} -lt 3 ]]; then
+    random_suffix="abc"
+  fi
+  if [[ ${#random_suffix} -gt 5 ]]; then
+    random_suffix="${random_suffix:0:5}"
   fi
   echo "$random_suffix"
 }
@@ -731,7 +812,7 @@ do_set_url_suffix() {
   current_suffix="$(get_env_key URL_SUFFIX)"
   echo "当前 URL_SUFFIX：${current_suffix:-未设置}"
 
-  if ! prompt_choice new_suffix "请输入新的网址后缀（留空自动生成，4-64位，仅字母数字_-）："; then
+  if ! prompt_choice new_suffix "请输入新的网址后缀（留空自动生成，3-5位，仅字母数字_-）："; then
     warn "未读取到输入，已取消设置。"
     return
   fi
@@ -743,7 +824,7 @@ do_set_url_suffix() {
   fi
 
   if ! is_valid_url_suffix "$new_suffix"; then
-    warn "后缀格式无效：仅支持 4-64 位字母、数字、下划线、短横线。"
+    warn "后缀格式无效：仅支持 3-5 位字母、数字、下划线、短横线。"
     return
   fi
 
@@ -756,6 +837,8 @@ do_set_url_suffix() {
   else
     echo "服务未运行。启动后新的安全后缀会生效。"
   fi
+
+  show_access_urls
 }
 
 main() {
