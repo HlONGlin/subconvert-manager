@@ -117,7 +117,21 @@
               role="button"
               aria-label="编辑订阅源 {{ s.name }}"
             >
-              <td>
+              <td data-label="名称">
+                <div style="font-weight:700;">{{ s.name }}</div>
+                <div class="hint">ID: <span class="mono">{{ sid }}</span></div>
+              </td>
+              <td data-label="类型">
+                <span class="badge">{{ s.kind }}</span>
+                <div class="hint">模板: <span class="mono">play</span></div>
+                {% if s.rate_limit_mbps and s.rate_limit_mbps|int > 0 %}
+                <div class="hint">限速: <span class="mono">{{ s.rate_limit_mbps }} Mbps</span></div>
+                {% endif %}
+              </td>
+              <td data-label="更新时间">
+                <div class="mono">{{ s.updated_at|fmt_ts }}</div>
+              </td>
+              <td data-label="订阅输出">
                 <div style="font-weight:700;">{{ s.name }}</div>
                 <div class="hint">ID: <span class="mono">{{ sid }}</span></div>
               </td>
@@ -156,7 +170,7 @@
                   管理接口：<span class="mono">/s/{{ sid }}/v2ray</span> / <span class="mono">/v2ray_raw</span> / <span class="mono">/clash</span>
                 </div>
               </td>
-              <td class="sticky-col">
+              <td class="sticky-col" data-label="操作">
                 <div class="actions">
                   <a class="btn" href="/sources/{{ sid }}/edit" aria-label="编辑 {{ s.name }}">编辑</a>
                   <form action="/sources/{{ sid }}/delete" method="post" data-lock-submit data-confirm="确认删除该订阅源吗？删除后不可恢复。">

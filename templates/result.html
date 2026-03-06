@@ -25,18 +25,18 @@
       <div class="hint">可直接复制结果到客户端，或按需保存本地。</div>
     </div>
 
-    <div class="card">
-      <div class="kv" style="justify-content:space-between;">
-        <div class="actions">
-          <button class="btn primary" type="button" data-copy="#out" aria-label="复制输出内容">一键复制</button>
-        </div>
-        <label style="display:inline-flex;align-items:center;gap:8px;font-weight:500;" for="toggle-wrap">
-          <input id="toggle-wrap" type="checkbox" checked style="width:auto;min-height:auto;"/>
-          自动换行显示
+    <div class="card result-card">
+      <div class="result-actions">
+        <button class="btn primary" type="button" data-copy="#out" aria-label="复制输出内容">一键复制</button>
+        <label class="wrap-toggle" for="toggle-wrap">
+          <input id="toggle-wrap" type="checkbox" checked/>
+          <span>自动换行</span>
         </label>
       </div>
       <hr class="sep"/>
       <textarea id="out" class="out mono" style="height:430px;" readonly aria-label="转换输出内容">{{ output }}</textarea>
+    </div>
+      <hr class="sep"/>
     </div>
   </div>
 

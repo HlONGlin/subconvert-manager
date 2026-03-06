@@ -465,11 +465,15 @@
 
   function initCopyTrigger() {
     document.addEventListener("click", function (event) {
-      if (!(event.target instanceof Element)) {
+      // 如果点击的是文本节点等非 Element，需要向上查找最近的 Element
+      var target = event.target;
+      while (target && !(target instanceof Element)) {
+        target = target.parentNode;
+      }
+      if (!target) {
         return;
       }
-
-      var btn = event.target.closest("[data-copy],[data-copy-text]");
+      var btn = target.closest("[data-copy],[data-copy-text]");
       if (!btn) {
         return;
       }
