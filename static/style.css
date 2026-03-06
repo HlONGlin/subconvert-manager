@@ -88,6 +88,19 @@ a:hover {
   outline-offset: 2px;
 }
 
+:where(
+  a,
+  button,
+  input,
+  select,
+  textarea,
+  summary,
+  [role="button"],
+  [tabindex]
+) {
+  -webkit-tap-highlight-color: transparent;
+}
+
 .wrap {
   max-width: 1400px;
   margin: 24px auto;
@@ -123,6 +136,10 @@ a:hover {
   align-items: center;
   flex-wrap: wrap;
   gap: 8px;
+}
+
+.top-actions form {
+  margin: 0;
 }
 
 .card {
@@ -333,6 +350,47 @@ input.is-loading::after {
   grid-template-columns: 1.4fr 1fr 1fr auto;
   gap: 10px;
   margin-top: 10px;
+}
+
+.toolbar-mobile {
+  display: none;
+}
+
+.mobile-filter-dialog {
+  width: min(420px, 94vw);
+  max-width: 100%;
+  border: 1px solid #d1dff3;
+  border-radius: 14px;
+  padding: 0;
+  background: #fff;
+  color: var(--text);
+  box-shadow: var(--shadow);
+}
+
+.mobile-filter-dialog::backdrop {
+  background: rgba(16, 27, 46, 0.45);
+  backdrop-filter: blur(2px);
+}
+
+.mobile-filter-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 12px 14px;
+  border-bottom: 1px solid #dce6f6;
+  background: #f6f9ff;
+}
+
+.mobile-filter-head h3 {
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.mobile-filter-body {
+  padding: 14px;
+  display: grid;
+  gap: 8px;
 }
 
 .actions {
@@ -784,6 +842,10 @@ body.modal-open {
     gap: 8px;
   }
 
+  .top-actions form {
+    width: 100%;
+  }
+
   .top-actions .btn {
     width: 100%;
     min-height: 42px;
@@ -793,8 +855,35 @@ body.modal-open {
   }
 
   .toolbar {
-    grid-template-columns: 1fr;
+    display: none;
+  }
+
+  .toolbar-mobile {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
     gap: 8px;
+    margin-top: 10px;
+  }
+
+  .toolbar-mobile .btn {
+    min-height: 40px;
+    padding: 8px 10px;
+  }
+
+  .mobile-filter-dialog {
+    width: calc(100vw - 20px);
+    margin: auto 10px 10px;
+  }
+
+  .mobile-filter-body input,
+  .mobile-filter-body select {
+    font-size: 16px;
+  }
+
+  .tbl tr:focus-within {
+    border-color: #d7e2f3;
+    box-shadow: 0 6px 16px rgba(22, 49, 97, 0.08);
+    background: #fff;
   }
 
   .toolbar label {
@@ -822,17 +911,23 @@ body.modal-open {
   }
 
   .link-row {
-    grid-template-columns: 1fr;
-    gap: 4px;
+    grid-template-columns: 1fr auto;
+    gap: 8px;
+    align-items: center;
   }
 
   .link-row strong {
     font-size: 11px;
   }
 
+  .link-row .truncate {
+    display: none;
+  }
+
   .link-row .btn {
     min-height: 36px;
     font-size: 13px;
+    justify-self: end;
   }
 
   .inline-details summary {

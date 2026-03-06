@@ -16,6 +16,12 @@
       <div class="top-actions">
         <a class="btn primary" href="/convert" aria-label="在线转换">在线转换</a>
         <a class="btn" href="/sources/new" aria-label="新增订阅源">新增订阅源</a>
+        <form action="/security/suffix/rotate" method="post" data-lock-submit data-confirm="确认更新安全后缀？旧公共链接将失效。">
+          <button class="btn" type="submit" aria-label="更新安全后缀">更新后缀</button>
+        </form>
+        <form action="/admin/update_from_github" method="post" data-lock-submit data-confirm="确认从 GitHub 拉取最新版本？">
+          <button class="btn" type="submit" aria-label="更新网站版本">更新版本</button>
+        </form>
         <button class="btn" type="button" data-density-toggle aria-label="切换页面密度">
           <span data-density-label>切换为紧凑</span>
         </button>
@@ -27,10 +33,10 @@
     <div class="card">
       <div class="kv" style="justify-content:space-between;">
         <span class="badge warn">安全提醒</span>
-        <span class="hint">请尽快更新密码并设置 SUB_TOKEN。</span>
+        <span class="hint">请尽快更新密码，并配置 SUB_TOKEN 与 URL_SUFFIX。</span>
       </div>
       <hr class="sep"/>
-      <div class="hint"><span class="mono">config.env</span> 建议配置强密码与随机 <span class="mono">SUB_TOKEN</span>。</div>
+      <div class="hint"><span class="mono">config.env</span> 建议配置强密码、随机 <span class="mono">SUB_TOKEN</span> 和 <span class="mono">URL_SUFFIX</span>。</div>
     </div>
     {% endif %}
 
@@ -44,6 +50,11 @@
         <span class="badge ok">Token 已启用</span>
         {% else %}
         <span class="badge danger">Token 未启用</span>
+        {% endif %}
+        {% if suffix_enabled %}
+        <span class="badge ok">后缀已启用</span>
+        {% else %}
+        <span class="badge warn">后缀未启用</span>
         {% endif %}
       </div>
 
@@ -81,6 +92,55 @@
         </div>
       </div>
 
+      <div class="toolbar-mobile" role="group" aria-label="移动端筛选工具">
+        <button class="btn" type="button" data-open-filter="search" aria-label="打开搜索窗口">搜索</button>
+        <button class="btn" type="button" data-open-filter="kind" aria-label="打开类型窗口">类型</button>
+        <button class="btn" type="button" data-open-filter="sort" aria-label="打开排序窗口">排序</button>
+      </div>
+
+      <dialog id="filter-search-dialog" class="mobile-filter-dialog" aria-label="搜索订阅源">
+        <div class="mobile-filter-head">
+          <h3>搜索</h3>
+          <button class="btn" type="button" data-close-dialog aria-label="关闭搜索窗口">关闭</button>
+        </div>
+        <div class="mobile-filter-body">
+          <label for="source-search-mobile">按名称搜索</label>
+          <input id="source-search-mobile" type="search" placeholder="输入订阅源名称" aria-label="移动端搜索订阅源名称"/>
+        </div>
+      </dialog>
+
+      <dialog id="filter-kind-dialog" class="mobile-filter-dialog" aria-label="筛选类型">
+        <div class="mobile-filter-head">
+          <h3>类型</h3>
+          <button class="btn" type="button" data-close-dialog aria-label="关闭类型窗口">关闭</button>
+        </div>
+        <div class="mobile-filter-body">
+          <label for="source-kind-filter-mobile">按类型筛选</label>
+          <select id="source-kind-filter-mobile" aria-label="移动端按类型筛选">
+            <option value="all">全部</option>
+            <option value="clash_url">clash_url</option>
+            <option value="clash_yaml">clash_yaml</option>
+            <option value="v2ray_text">v2ray_text</option>
+          </select>
+        </div>
+      </dialog>
+
+      <dialog id="filter-sort-dialog" class="mobile-filter-dialog" aria-label="排序方式">
+        <div class="mobile-filter-head">
+          <h3>排序</h3>
+          <button class="btn" type="button" data-close-dialog aria-label="关闭排序窗口">关闭</button>
+        </div>
+        <div class="mobile-filter-body">
+          <label for="source-sort-mobile">排序方式</label>
+          <select id="source-sort-mobile" aria-label="移动端排序方式">
+            <option value="updated_desc">最近更新</option>
+            <option value="updated_asc">最早更新</option>
+            <option value="name_asc">名称 A-Z</option>
+            <option value="name_desc">名称 Z-A</option>
+          </select>
+        </div>
+      </dialog>
+
       <div id="source-empty-filter" class="state-block" hidden style="margin-top:12px;">
         <div class="state-title">无匹配结果</div>
         <div class="hint">请调整筛选条件。</div>
@@ -101,20 +161,16 @@
             {% for s in sources %}
             {% set sid = s.id %}
             {% set base = request.base_url|string %}
-            {% set u_v2ray = base ~ 'pub/s/' ~ sid ~ '/v2ray?token=' ~ sub_token %}
-            {% set u_v2ray_raw = base ~ 'pub/s/' ~ sid ~ '/v2ray_raw?token=' ~ sub_token %}
-            {% set u_clash_play = base ~ 'pub/s/' ~ sid ~ '/clash?token=' ~ sub_token ~ '&template=play' %}
+            {% set suffix_q = '&suffix=' ~ url_suffix if suffix_enabled else '' %}
+            {% set u_v2ray = base ~ 'pub/s/' ~ sid ~ '/v2ray?token=' ~ sub_token ~ suffix_q %}
+            {% set u_v2ray_raw = base ~ 'pub/s/' ~ sid ~ '/v2ray_raw?token=' ~ sub_token ~ suffix_q %}
+            {% set u_clash_play = base ~ 'pub/s/' ~ sid ~ '/clash?token=' ~ sub_token ~ '&template=play' ~ suffix_q %}
             <tr class="source-row" data-name="{{ s.name }}" data-kind="{{ s.kind }}" data-updated="{{ s.updated_at if s.updated_at else 0 }}">
               <td data-label="名称">
                 <div style="font-weight:700;">{{ s.name }}</div>
-                <div class="hint">ID: <span class="mono">{{ sid }}</span></div>
               </td>
               <td data-label="类型">
                 <span class="badge">{{ s.kind }}</span>
-                <div class="hint">模板: <span class="mono">play</span></div>
-                {% if s.rate_limit_mbps and s.rate_limit_mbps|int > 0 %}
-                <div class="hint">限速: <span class="mono">{{ s.rate_limit_mbps }} Mbps</span></div>
-                {% endif %}
               </td>
               <td data-label="更新时间">
                 <div class="mono">{{ s.updated_at|fmt_ts }}</div>
@@ -140,7 +196,6 @@
                     </div>
                   </div>
                 </details>
-                <div class="hint" style="margin-top:8px;">管理接口：<span class="mono">/s/{{ sid }}/v2ray</span> / <span class="mono">/v2ray_raw</span> / <span class="mono">/clash</span></div>
               </td>
               <td class="sticky-col" data-label="操作">
                 <div class="actions row-actions">
@@ -156,11 +211,6 @@
         </table>
       </div>
       {% endif %}
-    </div>
-
-    <div class="card">
-      <h3>建议</h3>
-      <div class="hint" style="margin-top:8px;">优先使用 V2Ray Base64；公网部署建议启用 HTTPS 与 SUB_TOKEN。</div>
     </div>
   </div>
 

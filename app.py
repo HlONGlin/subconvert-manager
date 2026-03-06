@@ -3,6 +3,7 @@ import logging
 import os
 import re
 import secrets
+import subprocess
 import threading
 import time
 import uuid
@@ -161,7 +162,12 @@ def _format_ts(value: object) -> str:
         ts = int(value)
         if ts <= 0:
             return "-"
-        return datetime.fromtimestamp(ts).strftime("%Y-%m-%d %H:%M:%S")
+        dt = datetime.fromtimestamp(ts)
+        diff = max(0, int(time.time()) - ts)
+        if diff < 24 * 3600:
+            hours = max(1, diff // 3600)
+            return f"{hours} 小时前"
+        return dt.strftime("%m-%d")
     except (TypeError, ValueError, OSError):
         return "-"
 
@@ -174,6 +180,10 @@ DATA_FILE = (os.environ.get("DATA_FILE") or "data/sources.json").strip() or "dat
 BASIC_USER = (os.environ.get("BASIC_AUTH_USER") or DEFAULT_BASIC_USER).strip() or DEFAULT_BASIC_USER
 BASIC_PASS = (os.environ.get("BASIC_AUTH_PASS") or DEFAULT_BASIC_PASS).strip() or DEFAULT_BASIC_PASS
 SUB_TOKEN = (os.environ.get("SUB_TOKEN") or "").strip()
+URL_SUFFIX = (os.environ.get("URL_SUFFIX") or "").strip()
+UPDATE_BRANCH = (os.environ.get("UPDATE_BRANCH") or "main").strip() or "main"
+LOGIN_MAX_FAILS = _clamp(_safe_int(os.environ.get("LOGIN_MAX_FAILS", "3"), 3), 1, 10)
+LOGIN_LOCK_SECONDS = _clamp(_safe_int(os.environ.get("LOGIN_LOCK_SECONDS", "900"), 900), 60, 86400)
 MAX_REMOTE_BYTES = _clamp(_safe_int(os.environ.get("MAX_REMOTE_BYTES", "2097152"), 2097152), 262144, 10 * 1024 * 1024)
 
 app.add_middleware(
@@ -191,6 +201,8 @@ _FETCH_CACHE: Dict[str, Tuple[float, str]] = {}
 _FETCH_CACHE_LOCK = threading.Lock()
 _FETCH_CACHE_TTL = max(0.0, _safe_float(os.environ.get("FETCH_CACHE_TTL", "5"), 5.0))
 _FETCH_CACHE_MAX = _clamp(_safe_int(os.environ.get("FETCH_CACHE_MAX", "256"), 256), 16, 4096)
+_LOGIN_FAIL_STATE: Dict[str, Tuple[int, float]] = {}
+_LOGIN_FAIL_LOCK = threading.Lock()
 
 
 def _prune_fetch_cache(now: Optional[float] = None) -> None:
@@ -320,6 +332,72 @@ def require_sub_token(token: Optional[str]) -> bool:
     if not token or not secrets.compare_digest(token, SUB_TOKEN):
         raise HTTPException(status_code=401, detail="Invalid token")
     return True
+
+
+def require_url_suffix(suffix: Optional[str]) -> bool:
+    expected = (URL_SUFFIX or "").strip()
+    if not expected:
+        return True
+
+    candidate = _normalize_token(suffix)
+    if not candidate or not secrets.compare_digest(candidate, expected):
+        raise HTTPException(status_code=401, detail="Invalid suffix")
+    return True
+
+
+def _login_key(request: Request, username: str) -> str:
+    ip = ""
+    if request.client and request.client.host:
+        ip = request.client.host
+    return f"{(username or '').strip().lower()}@{ip}"
+
+
+def _login_lock_remaining(key: str) -> int:
+    now = time.time()
+    with _LOGIN_FAIL_LOCK:
+        state = _LOGIN_FAIL_STATE.get(key)
+        if not state:
+            return 0
+
+        _, locked_until = state
+        if locked_until <= now:
+            _LOGIN_FAIL_STATE.pop(key, None)
+            return 0
+
+        return int(max(1, locked_until - now))
+
+
+def _record_login_failure(key: str) -> int:
+    now = time.time()
+    with _LOGIN_FAIL_LOCK:
+        fail_count, locked_until = _LOGIN_FAIL_STATE.get(key, (0, 0.0))
+        if locked_until > now:
+            return int(max(1, locked_until - now))
+
+        fail_count += 1
+        if fail_count >= LOGIN_MAX_FAILS:
+            locked_until = now + LOGIN_LOCK_SECONDS
+            _LOGIN_FAIL_STATE[key] = (fail_count, locked_until)
+            return LOGIN_LOCK_SECONDS
+
+        _LOGIN_FAIL_STATE[key] = (fail_count, 0.0)
+        return 0
+
+
+def _clear_login_failure(key: str) -> None:
+    with _LOGIN_FAIL_LOCK:
+        _LOGIN_FAIL_STATE.pop(key, None)
+
+
+def _run_git_command(args: List[str], timeout_sec: int = 120) -> subprocess.CompletedProcess:
+    return subprocess.run(args, cwd=APP_DIR, text=True, capture_output=True, timeout=timeout_sec)
+
+
+def _git_error_message(proc: subprocess.CompletedProcess) -> str:
+    msg = (proc.stderr or proc.stdout or "").strip()
+    if not msg:
+        msg = "unknown error"
+    return msg.splitlines()[0][:180]
 
 
 def _fetch_text(url: str) -> str:
@@ -464,6 +542,7 @@ def login_submit(
 
     username = (username or "").strip()
     password = (password or "").strip()
+    login_key = _login_key(request, username)
 
     if not username or not password:
         return templates.TemplateResponse(
@@ -472,13 +551,29 @@ def login_submit(
             status_code=400,
         )
 
-    if not (secrets.compare_digest(username, BASIC_USER) and secrets.compare_digest(password, BASIC_PASS)):
+    remaining = _login_lock_remaining(login_key)
+    if remaining > 0:
         return templates.TemplateResponse(
             "login.html",
-            {"request": request, "error": "账号或密码错误"},
-            status_code=401,
+            {"request": request, "error": f"连续失败次数过多，请 {remaining} 秒后再试"},
+            status_code=429,
         )
 
+    if not (secrets.compare_digest(username, BASIC_USER) and secrets.compare_digest(password, BASIC_PASS)):
+        lock_seconds = _record_login_failure(login_key)
+        if lock_seconds > 0:
+            msg = f"连续失败 {LOGIN_MAX_FAILS} 次，已锁定 {LOGIN_LOCK_SECONDS} 秒"
+            code = 429
+        else:
+            msg = "账号或密码错误"
+            code = 401
+        return templates.TemplateResponse(
+            "login.html",
+            {"request": request, "error": msg},
+            status_code=code,
+        )
+
+    _clear_login_failure(login_key)
     request.session["is_admin"] = True
     request.session["username"] = username
     return RedirectResponse(url="/?toast=登录成功", status_code=302)
@@ -488,6 +583,40 @@ def login_submit(
 def logout(request: Request):
     request.session.clear()
     return RedirectResponse(url="/login?toast=已退出登录", status_code=302)
+
+
+@app.post("/admin/update_from_github")
+def admin_update_from_github(_=Depends(require_admin_auth)):
+    if not os.path.isdir(os.path.join(APP_DIR, ".git")):
+        raise HTTPException(status_code=500, detail="当前目录不是 Git 仓库，无法自动更新")
+
+    try:
+        fetch_proc = _run_git_command(["git", "fetch", "origin", UPDATE_BRANCH])
+        if fetch_proc.returncode != 0:
+            raise HTTPException(status_code=500, detail=f"Git fetch failed: {_git_error_message(fetch_proc)}")
+
+        pull_proc = _run_git_command(["git", "pull", "--ff-only", "origin", UPDATE_BRANCH])
+        if pull_proc.returncode != 0:
+            raise HTTPException(status_code=500, detail=f"Git pull failed: {_git_error_message(pull_proc)}")
+    except FileNotFoundError:
+        raise HTTPException(status_code=500, detail="服务器未安装 git")
+    except subprocess.TimeoutExpired:
+        raise HTTPException(status_code=504, detail="更新超时，请稍后重试")
+
+    return RedirectResponse(url="/?toast=已从 GitHub 拉取最新代码，请重启服务生效", status_code=303)
+
+
+@app.post("/security/suffix/rotate")
+def rotate_security_suffix(_=Depends(require_admin_auth)):
+    global URL_SUFFIX
+
+    URL_SUFFIX = secrets.token_urlsafe(10).replace("-", "").replace("_", "")
+    if not URL_SUFFIX:
+        URL_SUFFIX = uuid.uuid4().hex[:16]
+
+    _save_env_values({"URL_SUFFIX": URL_SUFFIX})
+    os.environ["URL_SUFFIX"] = URL_SUFFIX
+    return RedirectResponse(url="/?toast=安全后缀已更新，旧公共链接将失效", status_code=303)
 
 
 @app.get("/", response_class=HTMLResponse)
@@ -500,7 +629,9 @@ def home(request: Request, _=Depends(require_admin_auth)):
             "request": request,
             "sources": sources,
             "sub_token": SUB_TOKEN,
-            "security_warn": (BASIC_PASS == DEFAULT_BASIC_PASS) or (not SUB_TOKEN),
+            "url_suffix": URL_SUFFIX,
+            "suffix_enabled": bool(URL_SUFFIX),
+            "security_warn": (BASIC_PASS == DEFAULT_BASIC_PASS) or (not SUB_TOKEN) or (not URL_SUFFIX),
             "token_enabled": bool(SUB_TOKEN),
         },
     )
@@ -751,8 +882,9 @@ def sub_clash(sid: str, template: str = "", _=Depends(require_admin_auth)):
 
 
 @app.get("/pub/s/{sid}/v2ray", response_class=PlainTextResponse)
-def pub_v2ray_b64(sid: str, token: str = ""):
+def pub_v2ray_b64(sid: str, token: str = "", suffix: str = ""):
     require_sub_token(token)
+    require_url_suffix(suffix)
     uris = _resolve_to_uris(_source_or_404(sid))
     if not uris:
         raise HTTPException(status_code=422, detail="No usable node")
@@ -760,8 +892,9 @@ def pub_v2ray_b64(sid: str, token: str = ""):
 
 
 @app.get("/pub/s/{sid}/v2ray_raw", response_class=PlainTextResponse)
-def pub_v2ray_raw(sid: str, token: str = ""):
+def pub_v2ray_raw(sid: str, token: str = "", suffix: str = ""):
     require_sub_token(token)
+    require_url_suffix(suffix)
     uris = _resolve_to_uris(_source_or_404(sid))
     if not uris:
         raise HTTPException(status_code=422, detail="No usable node")
@@ -769,7 +902,8 @@ def pub_v2ray_raw(sid: str, token: str = ""):
 
 
 @app.get("/pub/s/{sid}/clash", response_class=PlainTextResponse)
-def pub_clash(sid: str, token: str = "", template: str = ""):
+def pub_clash(sid: str, token: str = "", template: str = "", suffix: str = ""):
     require_sub_token(token)
+    require_url_suffix(suffix)
     y = _resolve_to_clash_yaml(_source_or_404(sid), template=template)
     return y if y.endswith("\n") else y + "\n"

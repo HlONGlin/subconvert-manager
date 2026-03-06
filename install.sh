@@ -157,6 +157,10 @@ DATA_FILE=data/sources.json
 SUB_TOKEN=
 SESSION_SECRET=
 AUTH_MODE=both
+URL_SUFFIX=
+LOGIN_MAX_FAILS=3
+LOGIN_LOCK_SECONDS=900
+UPDATE_BRANCH=main
 EOF
     log "Created default config.env"
   fi

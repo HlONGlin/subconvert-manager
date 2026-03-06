@@ -10,6 +10,9 @@ class TestAppSetupHelpers(unittest.TestCase):
         self.old_config_env_file = appmod.CONFIG_ENV_FILE
         self.old_basic_user = appmod.BASIC_USER
         self.old_basic_pass = appmod.BASIC_PASS
+        self.old_url_suffix = appmod.URL_SUFFIX
+        self.old_login_max_fails = appmod.LOGIN_MAX_FAILS
+        self.old_login_lock_seconds = appmod.LOGIN_LOCK_SECONDS
         self.old_env_user = os.environ.get("BASIC_AUTH_USER")
         self.old_env_pass = os.environ.get("BASIC_AUTH_PASS")
 
@@ -17,6 +20,12 @@ class TestAppSetupHelpers(unittest.TestCase):
         appmod.CONFIG_ENV_FILE = self.old_config_env_file
         appmod.BASIC_USER = self.old_basic_user
         appmod.BASIC_PASS = self.old_basic_pass
+        appmod.URL_SUFFIX = self.old_url_suffix
+        appmod.LOGIN_MAX_FAILS = self.old_login_max_fails
+        appmod.LOGIN_LOCK_SECONDS = self.old_login_lock_seconds
+
+        with appmod._LOGIN_FAIL_LOCK:
+            appmod._LOGIN_FAIL_STATE.clear()
 
         if self.old_env_user is None:
             os.environ.pop("BASIC_AUTH_USER", None)
@@ -59,6 +68,34 @@ class TestAppSetupHelpers(unittest.TestCase):
 
             appmod._set_admin_credentials("new_user", "new_pass")
             self.assertFalse(appmod._is_initial_setup_required())
+
+    def test_require_url_suffix(self):
+        appmod.URL_SUFFIX = "abc123"
+        self.assertTrue(appmod.require_url_suffix("abc123"))
+
+        with self.assertRaises(appmod.HTTPException) as cm:
+            appmod.require_url_suffix("wrong")
+        self.assertEqual(cm.exception.status_code, 401)
+
+        appmod.URL_SUFFIX = ""
+        self.assertTrue(appmod.require_url_suffix(""))
+
+    def test_login_lock_after_three_failures(self):
+        appmod.LOGIN_MAX_FAILS = 3
+        appmod.LOGIN_LOCK_SECONDS = 60
+
+        key = "admin@127.0.0.1"
+        appmod._clear_login_failure(key)
+
+        self.assertEqual(appmod._record_login_failure(key), 0)
+        self.assertEqual(appmod._record_login_failure(key), 0)
+
+        lock_seconds = appmod._record_login_failure(key)
+        self.assertGreaterEqual(lock_seconds, 1)
+        self.assertGreater(appmod._login_lock_remaining(key), 0)
+
+        appmod._clear_login_failure(key)
+        self.assertEqual(appmod._login_lock_remaining(key), 0)
 
 
 if __name__ == "__main__":

@@ -528,7 +528,111 @@
     var searchEl = qs("#source-search");
     var kindEl = qs("#source-kind-filter");
     var sortEl = qs("#source-sort");
+    var searchMobileEl = qs("#source-search-mobile");
+    var kindMobileEl = qs("#source-kind-filter-mobile");
+    var sortMobileEl = qs("#source-sort-mobile");
     var emptyEl = qs("#source-empty-filter");
+
+    function syncValue(target, value) {
+      if (!target) {
+        return;
+      }
+      if (target.value !== value) {
+        target.value = value;
+      }
+    }
+
+    function syncMobileControls() {
+      syncValue(searchMobileEl, searchEl ? searchEl.value : "");
+      syncValue(kindMobileEl, kindEl ? kindEl.value : "all");
+      syncValue(sortMobileEl, sortEl ? sortEl.value : "updated_desc");
+    }
+
+    function setSearchValue(value) {
+      var next = normalizeText(value || "");
+      syncValue(searchEl, next);
+      syncValue(searchMobileEl, next);
+    }
+
+    function setKindValue(value) {
+      var next = (value || "all").toLowerCase();
+      syncValue(kindEl, next);
+      syncValue(kindMobileEl, next);
+    }
+
+    function setSortValue(value) {
+      var next = (value || "updated_desc").toLowerCase();
+      syncValue(sortEl, next);
+      syncValue(sortMobileEl, next);
+    }
+
+    function hasActiveFilter(search, kind) {
+      return Boolean(search) || kind !== "all";
+    }
+
+    function openDialog(dialog, opener, focusEl) {
+      if (!dialog) {
+        return;
+      }
+      dialog.__opener = opener || null;
+      if (typeof dialog.showModal === "function") {
+        dialog.showModal();
+      } else {
+        dialog.setAttribute("open", "open");
+      }
+      if (focusEl && typeof focusEl.focus === "function") {
+        focusEl.focus();
+      }
+    }
+
+    function closeDialog(dialog) {
+      if (!dialog) {
+        return;
+      }
+      if (typeof dialog.close === "function") {
+        dialog.close();
+      } else {
+        dialog.removeAttribute("open");
+      }
+      if (dialog.__opener && typeof dialog.__opener.focus === "function") {
+        dialog.__opener.focus();
+      }
+    }
+
+    function wireDialog(dialog) {
+      if (!dialog) {
+        return;
+      }
+
+      qsa("[data-close-dialog]", dialog).forEach(function (btn) {
+        btn.addEventListener("click", function () {
+          closeDialog(dialog);
+        });
+      });
+
+      dialog.addEventListener("click", function (event) {
+        if (event.target === dialog) {
+          closeDialog(dialog);
+        }
+      });
+
+      dialog.addEventListener("cancel", function () {
+        if (dialog.__opener && typeof dialog.__opener.focus === "function") {
+          dialog.__opener.focus();
+        }
+      });
+    }
+
+    var searchDialog = qs("#filter-search-dialog");
+    var kindDialog = qs("#filter-kind-dialog");
+    var sortDialog = qs("#filter-sort-dialog");
+    var openSearchBtn = qs('[data-open-filter="search"]');
+    var openKindBtn = qs('[data-open-filter="kind"]');
+    var openSortBtn = qs('[data-open-filter="sort"]');
+
+    wireDialog(searchDialog);
+    wireDialog(kindDialog);
+    wireDialog(sortDialog);
 
     function sortFn(mode) {
       if (mode === "name_asc") {
@@ -555,6 +659,7 @@
       var search = normalizeText(searchEl ? searchEl.value : "").toLowerCase();
       var kind = (kindEl ? kindEl.value : "all").toLowerCase();
       var mode = (sortEl ? sortEl.value : "updated_desc").toLowerCase();
+      var filtered = hasActiveFilter(search, kind);
 
       var visibleRows = rows.filter(function (row) {
         var rowName = (row.dataset.name || "").toLowerCase();
@@ -574,7 +679,7 @@
       });
 
       if (emptyEl) {
-        emptyEl.hidden = visibleRows.length !== 0;
+        emptyEl.hidden = !(filtered && visibleRows.length === 0);
       }
     }
 
@@ -588,7 +693,64 @@
       el.addEventListener("change", scheduledApply, { passive: true });
     });
 
+    if (searchMobileEl) {
+      searchMobileEl.addEventListener("input", function () {
+        setSearchValue(searchMobileEl.value);
+        scheduledApply();
+      });
+      searchMobileEl.addEventListener("change", function () {
+        setSearchValue(searchMobileEl.value);
+        scheduledApply();
+      });
+      searchMobileEl.addEventListener("keydown", function (event) {
+        if (event.key === "Enter") {
+          event.preventDefault();
+          setSearchValue(searchMobileEl.value);
+          scheduledApply();
+          closeDialog(searchDialog);
+        }
+      });
+    }
+
+    if (kindMobileEl) {
+      kindMobileEl.addEventListener("change", function () {
+        setKindValue(kindMobileEl.value);
+        scheduledApply();
+        closeDialog(kindDialog);
+      });
+    }
+
+    if (sortMobileEl) {
+      sortMobileEl.addEventListener("change", function () {
+        setSortValue(sortMobileEl.value);
+        scheduledApply();
+        closeDialog(sortDialog);
+      });
+    }
+
+    if (openSearchBtn && searchDialog) {
+      openSearchBtn.addEventListener("click", function () {
+        syncMobileControls();
+        openDialog(searchDialog, openSearchBtn, searchMobileEl);
+      });
+    }
+
+    if (openKindBtn && kindDialog) {
+      openKindBtn.addEventListener("click", function () {
+        syncMobileControls();
+        openDialog(kindDialog, openKindBtn, kindMobileEl);
+      });
+    }
+
+    if (openSortBtn && sortDialog) {
+      openSortBtn.addEventListener("click", function () {
+        syncMobileControls();
+        openDialog(sortDialog, openSortBtn, sortMobileEl);
+      });
+    }
+
     window.addEventListener("resize", scheduledApply, { passive: true });
+    syncMobileControls();
     scheduledApply();
   }
 
