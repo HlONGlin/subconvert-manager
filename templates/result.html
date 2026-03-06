@@ -11,7 +11,7 @@
     <div class="top">
       <div class="brand">
         <h1>{{ title }}</h1>
-        <div class="sub">来源：{{ source }} ｜ 解析数量：{{ count }}</div>
+        <div class="sub">来源：{{ source }} · 数量：{{ count }}</div>
       </div>
       <div class="top-actions">
         <button class="btn" type="button" data-density-toggle aria-label="切换页面密度"><span data-density-label>切换为紧凑</span></button>
@@ -22,12 +22,12 @@
 
     <div class="card state-block success" style="margin-bottom:12px;">
       <div class="state-title">转换成功</div>
-      <div class="hint">可直接复制结果到客户端，或按需保存本地。</div>
+      <div class="hint">可直接复制结果。</div>
     </div>
 
     <div class="card result-card">
       <div class="result-actions">
-        <button class="btn primary" type="button" data-copy="#out" aria-label="复制输出内容">一键复制</button>
+        <button class="btn primary" type="button" data-copy="#out" aria-label="复制输出内容">复制结果</button>
         <label class="wrap-toggle" for="toggle-wrap">
           <input id="toggle-wrap" type="checkbox" checked/>
           <span>自动换行</span>
@@ -35,8 +35,6 @@
       </div>
       <hr class="sep"/>
       <textarea id="out" class="out mono" style="height:430px;" readonly aria-label="转换输出内容">{{ output }}</textarea>
-    </div>
-      <hr class="sep"/>
     </div>
   </div>
 

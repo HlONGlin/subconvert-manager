@@ -60,6 +60,7 @@
 
   async function copyText(text) {
     var value = text == null ? "" : String(text);
+    var ta;
     if (!value) {
       showToast("复制失败", "没有可复制的内容");
       return;
@@ -69,7 +70,7 @@
       if (navigator.clipboard && navigator.clipboard.writeText) {
         await navigator.clipboard.writeText(value);
       } else {
-        var ta = document.createElement("textarea");
+        ta = document.createElement("textarea");
         ta.value = value;
         ta.setAttribute("readonly", "readonly");
         ta.style.position = "fixed";
@@ -172,6 +173,9 @@
     trimField(field);
     var value = (field.value || "").trim();
     var message = "";
+    var n;
+    var min;
+    var max;
 
     if (field.hasAttribute("data-validate-url") && value) {
       if (!/^https?:\/\/\S+$/i.test(value)) {
@@ -180,21 +184,21 @@
     }
 
     if (!message && field.hasAttribute("data-validate-int") && value) {
-      var n = Number(value);
+      n = Number(value);
       if (!Number.isFinite(n) || Number.isNaN(n)) {
         message = "请输入有效数字";
       }
     }
 
     if (!message && field.hasAttribute("data-min")) {
-      var min = Number(field.getAttribute("data-min"));
+      min = Number(field.getAttribute("data-min"));
       if (value && Number(value) < min) {
         message = "数值过小";
       }
     }
 
     if (!message && field.hasAttribute("data-max")) {
-      var max = Number(field.getAttribute("data-max"));
+      max = Number(field.getAttribute("data-max"));
       if (value && Number(value) > max) {
         message = "数值过大";
       }
@@ -465,7 +469,6 @@
 
   function initCopyTrigger() {
     document.addEventListener("click", function (event) {
-      // 如果点击的是文本节点等非 Element，需要向上查找最近的 Element
       var target = event.target;
       while (target && !(target instanceof Element)) {
         target = target.parentNode;
@@ -493,37 +496,6 @@
       }
 
       copyText(text);
-    });
-  }
-
-  function isNestedInteractive(node) {
-    return Boolean(node.closest("a,button,input,select,textarea,label,summary,details,form"));
-  }
-
-  function initRowNavigation() {
-    document.addEventListener("click", function (event) {
-      var row = event.target.closest("[data-row-link]");
-      if (!row || isNestedInteractive(event.target)) {
-        return;
-      }
-      var href = row.getAttribute("data-row-link");
-      if (href) {
-        window.location.href = href;
-      }
-    });
-
-    document.addEventListener("keydown", function (event) {
-      var row = event.target.closest("[data-row-link]");
-      if (!row) {
-        return;
-      }
-      if (event.key === "Enter" || event.key === " ") {
-        event.preventDefault();
-        var href = row.getAttribute("data-row-link");
-        if (href) {
-          window.location.href = href;
-        }
-      }
     });
   }
 
@@ -658,7 +630,6 @@
     initCopyTrigger();
     initFormGuards();
     initConfirmGuards();
-    initRowNavigation();
     initSourceTable();
     initResultTools();
     consumeToastParam();

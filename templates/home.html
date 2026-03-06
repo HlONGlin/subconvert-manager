@@ -11,7 +11,7 @@
     <div class="top">
       <div class="brand">
         <h1>SubConvert Manager</h1>
-        <div class="sub">订阅源管理、Clash/V2Ray 转换、公共订阅分发</div>
+        <div class="sub">订阅管理与转换</div>
       </div>
       <div class="top-actions">
         <a class="btn primary" href="/convert" aria-label="在线转换">在线转换</a>
@@ -27,53 +27,51 @@
     <div class="card">
       <div class="kv" style="justify-content:space-between;">
         <span class="badge warn">安全提醒</span>
-        <span class="hint">检测到默认密码或未设置 SUB_TOKEN，建议立即调整配置。</span>
+        <span class="hint">请尽快更新密码并设置 SUB_TOKEN。</span>
       </div>
       <hr class="sep"/>
-      <div class="hint">
-        请在 <span class="mono">config.env</span> 中配置强密码，并设置随机 <span class="mono">SUB_TOKEN</span>。
-      </div>
+      <div class="hint"><span class="mono">config.env</span> 建议配置强密码与随机 <span class="mono">SUB_TOKEN</span>。</div>
     </div>
     {% endif %}
 
     <div class="card" data-state-region="sources">
       <div class="kv" style="justify-content:space-between;align-items:flex-start;">
         <div>
-          <h3>已保存的订阅源</h3>
-          <div class="hint">支持输出 V2Ray Base64、V2Ray Raw 和 Clash YAML（play）。</div>
+          <h3>订阅源</h3>
+          <div class="hint">支持 V2Ray Base64 / Raw / Clash(play)。</div>
         </div>
         {% if token_enabled %}
-        <span class="badge ok">Token 订阅已启用</span>
+        <span class="badge ok">Token 已启用</span>
         {% else %}
-        <span class="badge danger">Token 订阅未启用</span>
+        <span class="badge danger">Token 未启用</span>
         {% endif %}
       </div>
 
       {% if sources|length == 0 %}
       <div class="empty" style="margin-top:12px;">
         <div class="state-title">暂无订阅源</div>
-        <div class="hint">点击“新增订阅源”保存 Clash URL / Clash YAML / V2Ray 文本后，即可生成订阅链接。</div>
+        <div class="hint">点击“新增订阅源”开始使用。</div>
         <div class="actions" style="margin-top:10px;">
-          <a class="btn primary" href="/sources/new">立即新增</a>
+          <a class="btn primary" href="/sources/new">新增订阅源</a>
         </div>
       </div>
       {% else %}
-      <div class="toolbar" role="group" aria-label="订阅源筛选工具">
+      <div class="toolbar" role="group" aria-label="筛选工具">
         <div>
-          <label for="source-search">搜索名称</label>
-          <input id="source-search" type="search" placeholder="按名称筛选" aria-label="搜索订阅源名称"/>
+          <label for="source-search">搜索</label>
+          <input id="source-search" type="search" placeholder="按名称搜索" aria-label="搜索订阅源名称"/>
         </div>
         <div>
-          <label for="source-kind-filter">类型筛选</label>
+          <label for="source-kind-filter">类型</label>
           <select id="source-kind-filter" aria-label="按类型筛选">
-            <option value="all">全部类型</option>
+            <option value="all">全部</option>
             <option value="clash_url">clash_url</option>
             <option value="clash_yaml">clash_yaml</option>
             <option value="v2ray_text">v2ray_text</option>
           </select>
         </div>
         <div>
-          <label for="source-sort">排序方式</label>
+          <label for="source-sort">排序</label>
           <select id="source-sort" aria-label="排序方式">
             <option value="updated_desc">最近更新</option>
             <option value="updated_asc">最早更新</option>
@@ -81,12 +79,11 @@
             <option value="name_desc">名称 Z-A</option>
           </select>
         </div>
-        <div class="status-line hint" aria-live="polite">支持键盘操作：Tab 聚焦行后 Enter 可直接编辑。</div>
       </div>
 
       <div id="source-empty-filter" class="state-block" hidden style="margin-top:12px;">
-        <div class="state-title">没有匹配结果</div>
-        <div class="hint">请调整搜索词或筛选条件。</div>
+        <div class="state-title">无匹配结果</div>
+        <div class="hint">请调整筛选条件。</div>
       </div>
 
       <div class="table-wrap" style="margin-top:12px;">
@@ -107,16 +104,7 @@
             {% set u_v2ray = base ~ 'pub/s/' ~ sid ~ '/v2ray?token=' ~ sub_token %}
             {% set u_v2ray_raw = base ~ 'pub/s/' ~ sid ~ '/v2ray_raw?token=' ~ sub_token %}
             {% set u_clash_play = base ~ 'pub/s/' ~ sid ~ '/clash?token=' ~ sub_token ~ '&template=play' %}
-            <tr
-              class="source-row"
-              data-name="{{ s.name }}"
-              data-kind="{{ s.kind }}"
-              data-updated="{{ s.updated_at if s.updated_at else 0 }}"
-              data-row-link="/sources/{{ sid }}/edit"
-              tabindex="0"
-              role="button"
-              aria-label="编辑订阅源 {{ s.name }}"
-            >
+            <tr class="source-row" data-name="{{ s.name }}" data-kind="{{ s.kind }}" data-updated="{{ s.updated_at if s.updated_at else 0 }}">
               <td data-label="名称">
                 <div style="font-weight:700;">{{ s.name }}</div>
                 <div class="hint">ID: <span class="mono">{{ sid }}</span></div>
@@ -131,23 +119,9 @@
               <td data-label="更新时间">
                 <div class="mono">{{ s.updated_at|fmt_ts }}</div>
               </td>
-              <td data-label="订阅输出">
-                <div style="font-weight:700;">{{ s.name }}</div>
-                <div class="hint">ID: <span class="mono">{{ sid }}</span></div>
-              </td>
-              <td>
-                <span class="badge">{{ s.kind }}</span>
-                <div class="hint">模板: <span class="mono">play</span></div>
-                {% if s.rate_limit_mbps and s.rate_limit_mbps|int > 0 %}
-                <div class="hint">限速: <span class="mono">{{ s.rate_limit_mbps }} Mbps</span></div>
-                {% endif %}
-              </td>
-              <td>
-                <div class="mono">{{ s.updated_at|fmt_ts }}</div>
-              </td>
-              <td>
+              <td data-label="订阅">
                 <details class="inline-details">
-                  <summary>展开查看订阅链接</summary>
+                  <summary>查看链接</summary>
                   <div class="link-stack mono">
                     <div class="link-row">
                       <strong>V2Ray b64</strong>
@@ -166,14 +140,12 @@
                     </div>
                   </div>
                 </details>
-                <div class="hint" style="margin-top:8px;">
-                  管理接口：<span class="mono">/s/{{ sid }}/v2ray</span> / <span class="mono">/v2ray_raw</span> / <span class="mono">/clash</span>
-                </div>
+                <div class="hint" style="margin-top:8px;">管理接口：<span class="mono">/s/{{ sid }}/v2ray</span> / <span class="mono">/v2ray_raw</span> / <span class="mono">/clash</span></div>
               </td>
               <td class="sticky-col" data-label="操作">
-                <div class="actions">
+                <div class="actions row-actions">
                   <a class="btn" href="/sources/{{ sid }}/edit" aria-label="编辑 {{ s.name }}">编辑</a>
-                  <form action="/sources/{{ sid }}/delete" method="post" data-lock-submit data-confirm="确认删除该订阅源吗？删除后不可恢复。">
+                  <form action="/sources/{{ sid }}/delete" method="post" data-lock-submit data-confirm="确认删除？">
                     <button class="btn danger" type="submit" aria-label="删除 {{ s.name }}">删除</button>
                   </form>
                 </div>
@@ -187,12 +159,8 @@
     </div>
 
     <div class="card">
-      <h3>使用建议</h3>
-      <div class="hint" style="margin-top:8px;">
-        1. 仅做节点转换时优先使用 <span class="mono">V2Ray Base64</span>。<br/>
-        2. Clash 输出统一使用 <span class="mono">Clash play</span>。<br/>
-        3. 公网部署建议同时启用强密码、SUB_TOKEN 和 HTTPS。
-      </div>
+      <h3>建议</h3>
+      <div class="hint" style="margin-top:8px;">优先使用 V2Ray Base64；公网部署建议启用 HTTPS 与 SUB_TOKEN。</div>
     </div>
   </div>
 
