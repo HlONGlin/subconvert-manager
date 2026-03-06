@@ -361,6 +361,10 @@ input.is-loading::after {
   background: #fff;
 }
 
+.tbl .badge {
+  white-space: nowrap;
+}
+
 .tbl th {
   position: sticky;
   top: 0;
@@ -674,6 +678,71 @@ body.modal-open {
     background: transparent;
   }
 
+  .table-wrap {
+    border: 0;
+    overflow: visible;
+  }
+
+  .tbl {
+    table-layout: auto;
+  }
+
+  .tbl,
+  .tbl thead,
+  .tbl tbody,
+  .tbl tr,
+  .tbl td {
+    display: block;
+    width: 100%;
+  }
+
+  .tbl thead {
+    display: none;
+  }
+
+  .tbl tbody {
+    display: grid;
+    gap: 10px;
+  }
+
+  .tbl tr {
+    background: #fff;
+    border: 1px solid #d7e2f3;
+    border-radius: 12px;
+    box-shadow: 0 6px 16px rgba(22, 49, 97, 0.08);
+    padding: 10px;
+  }
+
+  .tbl td {
+    border: 0;
+    padding: 6px 0;
+  }
+
+  .tbl td::before {
+    content: attr(data-label);
+    display: block;
+    margin-bottom: 3px;
+    font-size: 12px;
+    color: var(--muted);
+    font-weight: 600;
+  }
+
+  .row-actions {
+    flex-direction: row;
+    width: 100%;
+    gap: 8px;
+  }
+
+  .row-actions .btn,
+  .row-actions form {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .row-actions form .btn {
+    width: 100%;
+  }
+
   .quick-grid {
     grid-template-columns: 1fr;
   }
@@ -752,56 +821,6 @@ body.modal-open {
     font-size: 11px;
   }
 
-  .table-wrap {
-    border: 0;
-    overflow: visible;
-  }
-
-  .tbl,
-  .tbl thead,
-  .tbl tbody,
-  .tbl tr,
-  .tbl td {
-    display: block;
-    width: 100%;
-  }
-
-  .tbl thead {
-    display: none;
-  }
-
-  .tbl tbody {
-    display: grid;
-    gap: 10px;
-  }
-
-  .tbl tr {
-    background: #fff;
-    border: 1px solid #d7e2f3;
-    border-radius: 12px;
-    box-shadow: 0 6px 16px rgba(22, 49, 97, 0.08);
-    padding: 10px;
-  }
-
-  .tbl td {
-    border: 0;
-    padding: 6px 0;
-  }
-
-  .tbl td::before {
-    content: attr(data-label);
-    display: block;
-    margin-bottom: 3px;
-    font-size: 12px;
-    color: var(--muted);
-    font-weight: 600;
-  }
-
-  .tbl .sticky-col {
-    position: static;
-    background: transparent;
-  }
-
   .link-row {
     grid-template-columns: 1fr;
     gap: 4px;
@@ -820,21 +839,6 @@ body.modal-open {
     min-height: 40px;
     padding: 8px 0;
     font-size: 14px;
-  }
-
-  .row-actions {
-    flex-direction: row;
-    width: 100%;
-    gap: 8px;
-  }
-
-  .row-actions .btn,
-  .row-actions form {
-    flex: 1;
-  }
-
-  .row-actions form .btn {
-    width: 100%;
   }
 
   .result-actions {
