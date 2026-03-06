@@ -172,6 +172,46 @@ def _format_ts(value: object) -> str:
         return "-"
 
 
+def _url_suffix_value() -> str:
+    return (URL_SUFFIX or "").strip().strip("/")
+
+
+def _url_prefix() -> str:
+    suffix = _url_suffix_value()
+    if not suffix:
+        return ""
+    return f"/{suffix}"
+
+
+def _with_url_prefix(path: str) -> str:
+    raw = (path or "").strip()
+    if not raw:
+        raw = "/"
+    if not raw.startswith("/"):
+        raw = "/" + raw
+
+    prefix = _url_prefix()
+    if not prefix:
+        return raw
+
+    if raw == prefix or raw.startswith(prefix + "/"):
+        return raw
+
+    if raw == "/":
+        return prefix
+
+    return prefix + raw
+
+
+def _template_context(request: Request, **extra: object) -> Dict[str, object]:
+    ctx: Dict[str, object] = {
+        "request": request,
+        "url_prefix": _url_prefix(),
+    }
+    ctx.update(extra)
+    return ctx
+
+
 load_env()
 
 SESSION_SECRET = (os.environ.get("SESSION_SECRET") or "").strip() or "change_me_please_session_secret"
@@ -196,6 +236,31 @@ app.mount("/static", StaticFiles(directory="static"), name="static")
 templates = Jinja2Templates(directory="templates")
 templates.env.filters["fmt_ts"] = _format_ts
 security = HTTPBasic()
+
+
+@app.middleware("http")
+async def suffix_path_middleware(request: Request, call_next):
+    prefix = _url_prefix()
+    if not prefix:
+        return await call_next(request)
+
+    path = request.scope.get("path") or "/"
+    if path == prefix:
+        request.scope["path"] = "/"
+        return await call_next(request)
+
+    if path.startswith(prefix + "/"):
+        request.scope["path"] = path[len(prefix) :] or "/"
+        return await call_next(request)
+
+    if request.method in {"GET", "HEAD"}:
+        target = _with_url_prefix(path)
+        query = request.url.query
+        if query:
+            target = f"{target}?{query}"
+        return RedirectResponse(url=target, status_code=307)
+
+    return _render_http_error(request, 404, "目标资源不存在，可能已被删除或 URL 输入错误。")
 
 _FETCH_CACHE: Dict[str, Tuple[float, str]] = {}
 _FETCH_CACHE_LOCK = threading.Lock()
@@ -283,11 +348,7 @@ def _render_http_error(request: Request, status_code: int, detail: str):
     if _wants_html(request):
         return templates.TemplateResponse(
             "error.html",
-            {
-                "request": request,
-                "status_code": status_code,
-                "detail": detail,
-            },
+            _template_context(request, status_code=status_code, detail=detail),
             status_code=status_code,
         )
     return JSONResponse(status_code=status_code, content={"detail": detail})
@@ -296,9 +357,9 @@ def _render_http_error(request: Request, status_code: int, detail: str):
 @app.exception_handler(HTTPException)
 async def fastapi_http_exception_handler(request: Request, exc: HTTPException):
     if exc.status_code == 307 and str(exc.detail) == "redirect_login":
-        return RedirectResponse(url="/login", status_code=302)
+        return RedirectResponse(url=_with_url_prefix("/login"), status_code=302)
     if exc.status_code == 307 and str(exc.detail) == "redirect_setup":
-        return RedirectResponse(url="/setup", status_code=302)
+        return RedirectResponse(url=_with_url_prefix("/setup"), status_code=302)
 
     detail = str(exc.detail or "Request failed")
     if exc.status_code == 401 and detail.lower() == "not authenticated":
@@ -309,9 +370,9 @@ async def fastapi_http_exception_handler(request: Request, exc: HTTPException):
 @app.exception_handler(StarletteHTTPException)
 async def starlette_http_exception_handler(request: Request, exc: StarletteHTTPException):
     if exc.status_code == 307 and str(exc.detail) == "redirect_login":
-        return RedirectResponse(url="/login", status_code=302)
+        return RedirectResponse(url=_with_url_prefix("/login"), status_code=302)
     if exc.status_code == 307 and str(exc.detail) == "redirect_setup":
-        return RedirectResponse(url="/setup", status_code=302)
+        return RedirectResponse(url=_with_url_prefix("/setup"), status_code=302)
 
     detail = str(exc.detail or "Request failed")
     if exc.status_code == 401 and detail.lower() == "not authenticated":
@@ -477,21 +538,21 @@ def _save_db(db: Dict[str, object]) -> None:
 @app.get("/login", response_class=HTMLResponse)
 def login_page(request: Request):
     if _is_initial_setup_required():
-        return RedirectResponse(url="/setup", status_code=302)
+        return RedirectResponse(url=_with_url_prefix("/setup"), status_code=302)
 
     if request.session.get("is_admin"):
-        return RedirectResponse(url="/", status_code=302)
-    return templates.TemplateResponse("login.html", {"request": request, "error": ""})
+        return RedirectResponse(url=_with_url_prefix("/"), status_code=302)
+    return templates.TemplateResponse("login.html", _template_context(request, error=""))
 
 
 @app.get("/setup", response_class=HTMLResponse)
 def setup_page(request: Request):
     if not _is_initial_setup_required():
-        return RedirectResponse(url="/login?toast=Setup already completed", status_code=302)
+        return RedirectResponse(url=_with_url_prefix("/login?toast=Setup already completed"), status_code=302)
 
     return templates.TemplateResponse(
         "setup.html",
-        {"request": request, "error": "", "username": DEFAULT_BASIC_USER},
+        _template_context(request, error="", username=DEFAULT_BASIC_USER),
     )
 
 
@@ -503,7 +564,7 @@ def setup_submit(
     confirm_password: str = Form(default=""),
 ):
     if not _is_initial_setup_required():
-        return RedirectResponse(url="/login?toast=Setup already completed", status_code=302)
+        return RedirectResponse(url=_with_url_prefix("/login?toast=Setup already completed"), status_code=302)
 
     username = (username or "").strip()
     password = (password or "").strip()
@@ -513,7 +574,7 @@ def setup_submit(
     if error:
         return templates.TemplateResponse(
             "setup.html",
-            {"request": request, "error": error, "username": username},
+            _template_context(request, error=error, username=username),
             status_code=400,
         )
 
@@ -528,7 +589,7 @@ def setup_submit(
     request.session.clear()
     request.session["is_admin"] = True
     request.session["username"] = username
-    return RedirectResponse(url="/?toast=Initial setup completed", status_code=302)
+    return RedirectResponse(url=_with_url_prefix("/?toast=Initial setup completed"), status_code=302)
 
 
 @app.post("/login", response_class=HTMLResponse)
@@ -538,7 +599,7 @@ def login_submit(
     password: str = Form(default=""),
 ):
     if _is_initial_setup_required():
-        return RedirectResponse(url="/setup", status_code=302)
+        return RedirectResponse(url=_with_url_prefix("/setup"), status_code=302)
 
     username = (username or "").strip()
     password = (password or "").strip()
@@ -547,7 +608,7 @@ def login_submit(
     if not username or not password:
         return templates.TemplateResponse(
             "login.html",
-            {"request": request, "error": "请输入账号和密码"},
+            _template_context(request, error="请输入账号和密码"),
             status_code=400,
         )
 
@@ -555,7 +616,7 @@ def login_submit(
     if remaining > 0:
         return templates.TemplateResponse(
             "login.html",
-            {"request": request, "error": f"连续失败次数过多，请 {remaining} 秒后再试"},
+            _template_context(request, error=f"连续失败次数过多，请 {remaining} 秒后再试"),
             status_code=429,
         )
 
@@ -569,20 +630,20 @@ def login_submit(
             code = 401
         return templates.TemplateResponse(
             "login.html",
-            {"request": request, "error": msg},
+            _template_context(request, error=msg),
             status_code=code,
         )
 
     _clear_login_failure(login_key)
     request.session["is_admin"] = True
     request.session["username"] = username
-    return RedirectResponse(url="/?toast=登录成功", status_code=302)
+    return RedirectResponse(url=_with_url_prefix("/?toast=登录成功"), status_code=302)
 
 
 @app.get("/logout")
 def logout(request: Request):
     request.session.clear()
-    return RedirectResponse(url="/login?toast=已退出登录", status_code=302)
+    return RedirectResponse(url=_with_url_prefix("/login?toast=已退出登录"), status_code=302)
 
 
 @app.post("/admin/update_from_github")
@@ -603,20 +664,21 @@ def admin_update_from_github(_=Depends(require_admin_auth)):
     except subprocess.TimeoutExpired:
         raise HTTPException(status_code=504, detail="更新超时，请稍后重试")
 
-    return RedirectResponse(url="/?toast=已从 GitHub 拉取最新代码，请重启服务生效", status_code=303)
+    return RedirectResponse(url=_with_url_prefix("/?toast=已从 GitHub 拉取最新代码，请重启服务生效"), status_code=303)
 
 
 @app.post("/security/suffix/rotate")
 def rotate_security_suffix(_=Depends(require_admin_auth)):
     global URL_SUFFIX
 
-    URL_SUFFIX = secrets.token_urlsafe(10).replace("-", "").replace("_", "")
-    if not URL_SUFFIX:
-        URL_SUFFIX = uuid.uuid4().hex[:16]
+    suffix_len = 3 + secrets.randbelow(3)
+    URL_SUFFIX = secrets.token_urlsafe(8).replace("-", "").replace("_", "")[:suffix_len]
+    if len(URL_SUFFIX) < 3:
+        URL_SUFFIX = uuid.uuid4().hex[:3]
 
     _save_env_values({"URL_SUFFIX": URL_SUFFIX})
     os.environ["URL_SUFFIX"] = URL_SUFFIX
-    return RedirectResponse(url="/?toast=安全后缀已更新，旧公共链接将失效", status_code=303)
+    return RedirectResponse(url=_with_url_prefix("/?toast=安全后缀已更新，旧公共链接将失效"), status_code=303)
 
 
 @app.get("/", response_class=HTMLResponse)
@@ -625,21 +687,21 @@ def home(request: Request, _=Depends(require_admin_auth)):
     sources = sorted(sources, key=lambda s: _safe_int((s or {}).get("updated_at"), 0), reverse=True)
     return templates.TemplateResponse(
         "home.html",
-        {
-            "request": request,
-            "sources": sources,
-            "sub_token": SUB_TOKEN,
-            "url_suffix": URL_SUFFIX,
-            "suffix_enabled": bool(URL_SUFFIX),
-            "security_warn": (BASIC_PASS == DEFAULT_BASIC_PASS) or (not SUB_TOKEN) or (not URL_SUFFIX),
-            "token_enabled": bool(SUB_TOKEN),
-        },
+        _template_context(
+            request,
+            sources=sources,
+            sub_token=SUB_TOKEN,
+            url_suffix=URL_SUFFIX,
+            suffix_enabled=bool(URL_SUFFIX),
+            security_warn=(BASIC_PASS == DEFAULT_BASIC_PASS) or (not SUB_TOKEN) or (not URL_SUFFIX),
+            token_enabled=bool(SUB_TOKEN),
+        ),
     )
 
 
 @app.get("/convert", response_class=HTMLResponse)
 def convert_page(request: Request, _=Depends(require_admin_auth)):
-    return templates.TemplateResponse("convert.html", {"request": request})
+    return templates.TemplateResponse("convert.html", _template_context(request))
 
 
 @app.post("/convert/clash_to_v2ray", response_class=HTMLResponse)
@@ -674,13 +736,7 @@ async def clash_to_v2ray_web(
     output = b64 if out == "base64" else raw
     return templates.TemplateResponse(
         "result.html",
-        {
-            "request": request,
-            "title": "Clash -> V2Ray",
-            "source": source,
-            "count": len(uris),
-            "output": output,
-        },
+        _template_context(request, title="Clash -> V2Ray", source=source, count=len(uris), output=output),
     )
 
 
@@ -712,19 +768,13 @@ async def v2ray_to_clash_web(
     y = yaml.safe_dump(doc, allow_unicode=True, sort_keys=False)
     return templates.TemplateResponse(
         "result.html",
-        {
-            "request": request,
-            "title": "V2Ray -> Clash",
-            "source": "文本输入",
-            "count": len(proxies),
-            "output": y,
-        },
+        _template_context(request, title="V2Ray -> Clash", source="文本输入", count=len(proxies), output=y),
     )
 
 
 @app.get("/sources/new", response_class=HTMLResponse)
 def source_new(request: Request, _=Depends(require_admin_auth)):
-    return templates.TemplateResponse("source_edit.html", {"request": request, "src": None})
+    return templates.TemplateResponse("source_edit.html", _template_context(request, src=None))
 
 
 @app.get("/sources/{sid}/edit", response_class=HTMLResponse)
@@ -733,7 +783,7 @@ def source_edit(request: Request, sid: str, _=Depends(require_admin_auth)):
     src = get_source(_load_db(), sid)
     if not src:
         raise HTTPException(status_code=404, detail="Source not found")
-    return templates.TemplateResponse("source_edit.html", {"request": request, "src": src})
+    return templates.TemplateResponse("source_edit.html", _template_context(request, src=src))
 
 
 @app.post("/sources/save")
@@ -802,7 +852,7 @@ async def source_save(
         },
     )
     _save_db(db)
-    return RedirectResponse(url="/?toast=保存成功", status_code=303)
+    return RedirectResponse(url=_with_url_prefix("/?toast=保存成功"), status_code=303)
 
 
 @app.post("/sources/{sid}/delete")
@@ -811,7 +861,7 @@ def source_delete(sid: str, _=Depends(require_admin_auth)):
     db = _load_db()
     delete_source(db, sid)
     _save_db(db)
-    return RedirectResponse(url="/?toast=删除成功", status_code=303)
+    return RedirectResponse(url=_with_url_prefix("/?toast=删除成功"), status_code=303)
 
 
 def _resolve_to_uris(src: dict) -> List[str]:
@@ -882,9 +932,8 @@ def sub_clash(sid: str, template: str = "", _=Depends(require_admin_auth)):
 
 
 @app.get("/pub/s/{sid}/v2ray", response_class=PlainTextResponse)
-def pub_v2ray_b64(sid: str, token: str = "", suffix: str = ""):
+def pub_v2ray_b64(sid: str, token: str = ""):
     require_sub_token(token)
-    require_url_suffix(suffix)
     uris = _resolve_to_uris(_source_or_404(sid))
     if not uris:
         raise HTTPException(status_code=422, detail="No usable node")
@@ -892,9 +941,8 @@ def pub_v2ray_b64(sid: str, token: str = "", suffix: str = ""):
 
 
 @app.get("/pub/s/{sid}/v2ray_raw", response_class=PlainTextResponse)
-def pub_v2ray_raw(sid: str, token: str = "", suffix: str = ""):
+def pub_v2ray_raw(sid: str, token: str = ""):
     require_sub_token(token)
-    require_url_suffix(suffix)
     uris = _resolve_to_uris(_source_or_404(sid))
     if not uris:
         raise HTTPException(status_code=422, detail="No usable node")
@@ -902,8 +950,7 @@ def pub_v2ray_raw(sid: str, token: str = "", suffix: str = ""):
 
 
 @app.get("/pub/s/{sid}/clash", response_class=PlainTextResponse)
-def pub_clash(sid: str, token: str = "", template: str = "", suffix: str = ""):
+def pub_clash(sid: str, token: str = "", template: str = ""):
     require_sub_token(token)
-    require_url_suffix(suffix)
     y = _resolve_to_clash_yaml(_source_or_404(sid), template=template)
     return y if y.endswith("\n") else y + "\n"

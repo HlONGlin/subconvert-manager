@@ -4,7 +4,7 @@
   <meta charset="utf-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <title>在线转换 - SubConvert Manager</title>
-  <link rel="stylesheet" href="/static/style.css"/>
+  <link rel="stylesheet" href="{{ url_prefix }}/static/style.css"/>
 </head>
 <body>
   <div class="wrap">
@@ -15,8 +15,8 @@
       </div>
       <div class="top-actions">
         <button class="btn" type="button" data-density-toggle aria-label="切换页面密度"><span data-density-label>切换为紧凑</span></button>
-        <a class="btn" href="/" aria-label="返回管理">返回管理</a>
-        <a class="btn danger" href="/logout" aria-label="退出登录">退出登录</a>
+        <a class="btn" href="{{ url_prefix }}/" aria-label="返回管理">返回管理</a>
+        <a class="btn danger" href="{{ url_prefix }}/logout" aria-label="退出登录">退出登录</a>
       </div>
     </div>
 
@@ -26,7 +26,7 @@
         <div class="hint" style="margin-top:6px;">支持远程订阅 URL 或上传本地 YAML 文件。</div>
         <hr class="sep"/>
 
-        <form action="/convert/clash_to_v2ray" method="post" enctype="multipart/form-data" data-lock-submit>
+        <form action="{{ url_prefix }}/convert/clash_to_v2ray" method="post" enctype="multipart/form-data" data-lock-submit>
           <div class="row">
             <label for="clash-url">Clash 订阅链接（可选）</label>
             <input id="clash-url" name="url" placeholder="https://example.com/sub.yaml" data-validate-url aria-label="Clash 订阅链接"/>
@@ -57,7 +57,7 @@
         <div class="hint" style="margin-top:6px;">支持粘贴多行 URI，或直接粘贴 Base64 订阅文本。</div>
         <hr class="sep"/>
 
-        <form action="/convert/v2ray_to_clash" method="post" data-lock-submit>
+        <form action="{{ url_prefix }}/convert/v2ray_to_clash" method="post" data-lock-submit>
           <div class="row">
             <label for="v2ray-text">V2Ray 输入内容</label>
             <textarea
@@ -107,6 +107,6 @@
     <div class="msg"></div>
   </div>
 
-  <script src="/static/app.js"></script>
+  <script src="{{ url_prefix }}/static/app.js"></script>
 </body>
 </html>

@@ -31,6 +31,7 @@ REPO_URL="${REPO_URL:-https://github.com/HlONGlin/subconvert-manager.git}"
 BRANCH="${BRANCH:-main}"
 BOOTSTRAP_DIR="${BOOTSTRAP_DIR:-/opt/subconvert-manager}"
 BOOTSTRAP_FORCE_UPDATE="${BOOTSTRAP_FORCE_UPDATE:-0}"
+CHECK_REPO_LAST_ERROR=""
 
 log() {
   printf '[%s] %s\n' "$(date '+%Y-%m-%d %H:%M:%S')" "$*"
@@ -208,8 +209,18 @@ check_repo_remote_update() {
   local branch="$2"
   local local_head=""
   local remote_head=""
+  local fetch_output=""
 
-  if ! git -C "$repo_dir" fetch --quiet origin "$branch"; then
+  CHECK_REPO_LAST_ERROR=""
+
+  if [[ ! -d "$repo_dir/.git" ]]; then
+    CHECK_REPO_LAST_ERROR="部署目录不是 Git 仓库"
+    return 3
+  fi
+
+  if ! fetch_output="$(git -C "$repo_dir" fetch --quiet origin "$branch" 2>&1)"; then
+    CHECK_REPO_LAST_ERROR="$(printf '%s' "$fetch_output" | head -n1)"
+    [[ -n "$CHECK_REPO_LAST_ERROR" ]] || CHECK_REPO_LAST_ERROR="git fetch 失败"
     return 2
   fi
 
@@ -217,6 +228,7 @@ check_repo_remote_update() {
   remote_head="$(git -C "$repo_dir" rev-parse "origin/$branch" 2>/dev/null || true)"
 
   if [[ -z "$local_head" || -z "$remote_head" ]]; then
+    CHECK_REPO_LAST_ERROR="无法解析本地或远端提交"
     return 2
   fi
 
@@ -232,7 +244,8 @@ check_repo_remote_update() {
     return 1
   fi
 
-  return 2
+  CHECK_REPO_LAST_ERROR="本地与远端分叉，无法自动判断更新"
+  return 4
 }
 
 bootstrap_handoff_with_update_check() {
@@ -266,11 +279,20 @@ bootstrap_handoff_with_update_check() {
     return
   fi
 
-  if [[ "$update_state" -eq 1 ]]; then
-    log "GitHub 无更新，调用本地版本。"
-  else
-    warn "检查远端更新失败，调用本地版本。"
-  fi
+  case "$update_state" in
+    1)
+      log "GitHub 无更新，调用本地版本。"
+      ;;
+    3)
+      warn "${CHECK_REPO_LAST_ERROR}，跳过远端检查，调用本地版本。"
+      ;;
+    4)
+      warn "${CHECK_REPO_LAST_ERROR}，已跳过自动更新，调用本地版本。"
+      ;;
+    *)
+      warn "检查远端更新失败：${CHECK_REPO_LAST_ERROR:-未知原因}，调用本地版本。"
+      ;;
+  esac
 }
 
 detect_service_mgr() {
@@ -498,7 +520,7 @@ show_access_urls() {
   local port local_ip public_ip access_url
   local url_suffix=""
   local sub_token=""
-  local suffix_param=""
+  local suffix_base_url=""
   port="$(get_port)"
   local_ip="$(detect_local_ip)"
   public_ip="$(detect_public_ip || true)"
@@ -506,25 +528,33 @@ show_access_urls() {
   url_suffix="$(get_env_key URL_SUFFIX)"
   sub_token="$(get_env_key SUB_TOKEN)"
 
+  if [[ -n "$url_suffix" ]]; then
+    suffix_base_url="${access_url%/}/${url_suffix}/"
+  else
+    suffix_base_url="$access_url"
+  fi
+
   echo "----------------------------------------"
   echo "端口：$port"
-  echo "地址：$access_url"
+  echo "地址：$suffix_base_url"
   echo "内网地址：http://${local_ip}:${port}/"
   if [[ -n "$public_ip" && "$public_ip" != "$local_ip" ]]; then
     echo "公网地址：http://${public_ip}:${port}/"
   fi
-  echo "首次初始化页面：http://${local_ip}:${port}/setup"
+  if [[ -n "$url_suffix" ]]; then
+    echo "首次初始化页面：http://${local_ip}:${port}/${url_suffix}/setup"
+  else
+    echo "首次初始化页面：http://${local_ip}:${port}/setup"
+  fi
 
   if [[ -n "$sub_token" ]]; then
     if [[ -n "$url_suffix" ]]; then
-      suffix_param="&suffix=${url_suffix}"
       echo "安全后缀：${url_suffix}"
-      echo "后缀使用方式：通过查询参数 suffix=${url_suffix}（不是路径）。"
     else
       echo "安全后缀：未设置"
     fi
     echo "订阅示例（请将 <sid> 替换为你的订阅ID）："
-    echo "${access_url}pub/s/<sid>/v2ray?token=${sub_token}${suffix_param}"
+    echo "${suffix_base_url}pub/s/<sid>/v2ray?token=${sub_token}"
   else
     echo "提示：SUB_TOKEN 未设置，公共订阅链接暂不可用。"
   fi
@@ -747,7 +777,12 @@ do_update_from_github() {
       echo "当前已是最新版本，无需更新。"
       return
     fi
-    die "检查远端更新失败，请稍后重试。"
+
+    if [[ "$update_state" -eq 4 ]]; then
+      die "${CHECK_REPO_LAST_ERROR}，请先处理本地分支后再更新。"
+    fi
+
+    die "检查远端更新失败：${CHECK_REPO_LAST_ERROR:-未知原因}"
   fi
 
   if repo_has_local_changes "$APP_DIR"; then
@@ -830,6 +865,7 @@ do_set_url_suffix() {
 
   set_env_key "URL_SUFFIX" "$new_suffix"
   echo "已更新 URL_SUFFIX：$new_suffix"
+  echo "注意：后缀通过路径使用，例如 /$new_suffix"
 
   if service_is_running; then
     service_restart

@@ -4,7 +4,7 @@
   <meta charset="utf-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <title>登录 - SubConvert Manager</title>
-  <link rel="stylesheet" href="/static/style.css"/>
+  <link rel="stylesheet" href="{{ url_prefix }}/static/style.css"/>
 </head>
 <body>
   <div class="wrap">
@@ -21,7 +21,7 @@
       </div>
       {% endif %}
 
-      <form method="post" action="/login" data-lock-submit style="margin-top:14px;display:grid;gap:12px;">
+      <form method="post" action="{{ url_prefix }}/login" data-lock-submit style="margin-top:14px;display:grid;gap:12px;">
         <div>
           <label for="login-user">账号</label>
           <input id="login-user" name="username" autocomplete="username" required aria-label="账号"/>
@@ -34,7 +34,7 @@
 
         <div class="actions" style="margin-top:6px;">
           <button class="btn primary" type="submit">登录</button>
-          <a class="btn" href="/">返回首页</a>
+          <a class="btn" href="{{ url_prefix }}/">返回首页</a>
         </div>
 
         <div class="hint">
@@ -49,6 +49,6 @@
     <div class="msg"></div>
   </div>
 
-  <script src="/static/app.js"></script>
+  <script src="{{ url_prefix }}/static/app.js"></script>
 </body>
 </html>

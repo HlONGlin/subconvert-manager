@@ -4,7 +4,7 @@
   <meta charset="utf-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <title>{{ title }} - SubConvert Manager</title>
-  <link rel="stylesheet" href="/static/style.css"/>
+  <link rel="stylesheet" href="{{ url_prefix }}/static/style.css"/>
 </head>
 <body>
   <div class="wrap">
@@ -15,8 +15,8 @@
       </div>
       <div class="top-actions">
         <button class="btn" type="button" data-density-toggle aria-label="切换页面密度"><span data-density-label>切换为紧凑</span></button>
-        <a class="btn" href="/convert">继续转换</a>
-        <a class="btn" href="/">返回管理</a>
+        <a class="btn" href="{{ url_prefix }}/convert">继续转换</a>
+        <a class="btn" href="{{ url_prefix }}/">返回管理</a>
       </div>
     </div>
 
@@ -43,6 +43,6 @@
     <div class="msg"></div>
   </div>
 
-  <script src="/static/app.js"></script>
+  <script src="{{ url_prefix }}/static/app.js"></script>
 </body>
 </html>

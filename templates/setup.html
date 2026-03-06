@@ -4,7 +4,7 @@
   <meta charset="utf-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <title>Initial Setup - SubConvert Manager</title>
-  <link rel="stylesheet" href="/static/style.css"/>
+  <link rel="stylesheet" href="{{ url_prefix }}/static/style.css"/>
 </head>
 <body>
   <div class="wrap">
@@ -21,7 +21,7 @@
       </div>
       {% endif %}
 
-      <form method="post" action="/setup" data-lock-submit style="margin-top:14px;display:grid;gap:12px;">
+      <form method="post" action="{{ url_prefix }}/setup" data-lock-submit style="margin-top:14px;display:grid;gap:12px;">
         <div>
           <label for="setup-user">管理员账号</label>
           <input
@@ -80,6 +80,6 @@
     <div class="msg"></div>
   </div>
 
-  <script src="/static/app.js"></script>
+  <script src="{{ url_prefix }}/static/app.js"></script>
 </body>
 </html>
