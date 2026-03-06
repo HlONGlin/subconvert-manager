@@ -164,6 +164,8 @@ def _format_ts(value: object) -> str:
             return "-"
         dt = datetime.fromtimestamp(ts)
         diff = max(0, int(time.time()) - ts)
+        if diff < 30 * 60:
+            return "刚刚更新"
         if diff < 24 * 3600:
             hours = max(1, diff // 3600)
             return f"{hours} 小时前"
