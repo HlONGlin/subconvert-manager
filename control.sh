@@ -203,6 +203,66 @@ sync_repo_to_bootstrap_dir() {
   chmod +x "$BOOTSTRAP_DIR/control.sh" "$BOOTSTRAP_DIR/install.sh" "$BOOTSTRAP_DIR/uninstall.sh" || true
 }
 
+check_repo_remote_update() {
+  local repo_dir="$1"
+  local branch="$2"
+  local local_head=""
+  local remote_head=""
+
+  if ! git -C "$repo_dir" fetch --quiet origin "$branch"; then
+    return 2
+  fi
+
+  local_head="$(git -C "$repo_dir" rev-parse HEAD 2>/dev/null || true)"
+  remote_head="$(git -C "$repo_dir" rev-parse "origin/$branch" 2>/dev/null || true)"
+
+  if [[ -z "$local_head" || -z "$remote_head" ]]; then
+    return 2
+  fi
+
+  if [[ "$local_head" == "$remote_head" ]]; then
+    return 1
+  fi
+
+  return 0
+}
+
+bootstrap_handoff_with_update_check() {
+  if ! has_cmd git; then
+    warn "未找到 git，跳过远端更新检查，直接调用本地版本。"
+    return
+  fi
+
+  local branch="$BRANCH"
+  local update_state=0
+
+  log "检查 GitHub 仓库是否有更新（分支：$branch）..."
+  if check_repo_remote_update "$BOOTSTRAP_DIR" "$branch"; then
+    log "检测到新版本，准备同步本地版本。"
+
+    if repo_has_local_changes "$BOOTSTRAP_DIR"; then
+      warn "本地仓库存在未提交改动，已跳过自动同步。"
+      warn "请手动处理改动后再更新。"
+      return
+    fi
+
+    if ! sync_repo_to_origin "$BOOTSTRAP_DIR"; then
+      warn "自动同步失败，将继续调用本地版本。"
+      return
+    fi
+
+    log "本地版本已同步到最新。"
+    return
+  fi
+
+  update_state=$?
+  if [[ "$update_state" -eq 1 ]]; then
+    log "GitHub 无更新，调用本地版本。"
+  else
+    warn "检查远端更新失败，调用本地版本。"
+  fi
+}
+
 detect_service_mgr() {
   if has_cmd systemctl && [[ -d /run/systemd/system ]]; then
     echo "systemd"
@@ -465,6 +525,8 @@ show_menu() {
   echo "5) 查看服务状态与访问地址"
   echo "6) 修改自定义端口"
   echo "7) 仅显示访问地址"
+  echo "8) 从 GitHub 更新网站版本"
+  echo "9) 设置网址后缀安全（URL_SUFFIX）"
   echo "0) 退出"
   if [[ "$bootstrap_mode" -eq 1 ]]; then
     echo "提示：首次运行请先选择 1)，部署完成后会自动进入完整控制菜单。"
@@ -595,8 +657,110 @@ do_change_port() {
   show_access_urls
 }
 
+do_update_from_github() {
+  require_root
+  ensure_git
+
+  if [[ ! -d "$APP_DIR/.git" ]]; then
+    die "当前目录不是 Git 仓库，无法更新。"
+  fi
+
+  local branch="$BRANCH"
+  local update_state=0
+
+  log "检查 GitHub 是否有更新（分支：$branch）..."
+  if ! check_repo_remote_update "$APP_DIR" "$branch"; then
+    update_state=$?
+    if [[ "$update_state" -eq 1 ]]; then
+      echo "当前已是最新版本，无需更新。"
+      return
+    fi
+    die "检查远端更新失败，请稍后重试。"
+  fi
+
+  if repo_has_local_changes "$APP_DIR"; then
+    warn "检测到本地未提交改动，已取消自动更新以避免覆盖。"
+    warn "请先提交或清理本地改动后再执行更新。"
+    return
+  fi
+
+  log "检测到新版本，开始更新..."
+  if ! git -C "$APP_DIR" checkout "$branch" >/dev/null 2>&1; then
+    if ! git -C "$APP_DIR" checkout -B "$branch" "origin/$branch" >/dev/null 2>&1; then
+      die "切换分支失败：$branch"
+    fi
+  fi
+
+  if ! git -C "$APP_DIR" merge --ff-only "origin/$branch"; then
+    die "更新失败：无法快进合并，请检查仓库状态。"
+  fi
+
+  if service_is_running; then
+    service_restart
+    echo "已更新到最新版本，并重启服务。"
+  else
+    echo "已更新到最新版本。服务当前未运行，可按需手动启动。"
+  fi
+
+  show_access_urls
+}
+
+is_valid_url_suffix() {
+  local suffix="$1"
+  [[ "$suffix" =~ ^[A-Za-z0-9_-]{4,64}$ ]]
+}
+
+generate_random_suffix() {
+  local random_suffix=""
+  random_suffix="$(tr -dc 'A-Za-z0-9' </dev/urandom 2>/dev/null | head -c 16 || true)"
+  if [[ -z "$random_suffix" ]]; then
+    random_suffix="$(date +%s%N | sha256sum 2>/dev/null | awk '{print $1}' | cut -c1-16 || true)"
+  fi
+  if [[ -z "$random_suffix" ]]; then
+    random_suffix="suffix$(date +%s)"
+  fi
+  echo "$random_suffix"
+}
+
+do_set_url_suffix() {
+  require_root
+
+  local current_suffix=""
+  local new_suffix=""
+
+  current_suffix="$(get_env_key URL_SUFFIX)"
+  echo "当前 URL_SUFFIX：${current_suffix:-未设置}"
+
+  if ! prompt_choice new_suffix "请输入新的网址后缀（留空自动生成，4-64位，仅字母数字_-）："; then
+    warn "未读取到输入，已取消设置。"
+    return
+  fi
+
+  new_suffix="$(printf '%s' "$new_suffix" | tr -d '[:space:]')"
+  if [[ -z "$new_suffix" ]]; then
+    new_suffix="$(generate_random_suffix)"
+    log "未输入后缀，已自动生成。"
+  fi
+
+  if ! is_valid_url_suffix "$new_suffix"; then
+    warn "后缀格式无效：仅支持 4-64 位字母、数字、下划线、短横线。"
+    return
+  fi
+
+  set_env_key "URL_SUFFIX" "$new_suffix"
+  echo "已更新 URL_SUFFIX：$new_suffix"
+
+  if service_is_running; then
+    service_restart
+    echo "服务已重启，新的安全后缀已生效。"
+  else
+    echo "服务未运行。启动后新的安全后缀会生效。"
+  fi
+}
+
 main() {
   if is_bootstrap_mode && is_repo_ready "$BOOTSTRAP_DIR"; then
+    bootstrap_handoff_with_update_check
     log "检测到已部署目录，切换到本地控制器：$BOOTSTRAP_DIR/control.sh"
     exec bash "$BOOTSTRAP_DIR/control.sh" "$@"
   fi
@@ -637,6 +801,16 @@ main() {
       7)
         if require_deployed_env; then
           show_access_urls
+        fi
+        ;;
+      8)
+        if require_deployed_env; then
+          do_update_from_github
+        fi
+        ;;
+      9)
+        if require_deployed_env; then
+          do_set_url_suffix
         fi
         ;;
       0) exit 0 ;;
