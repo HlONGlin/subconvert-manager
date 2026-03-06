@@ -256,6 +256,8 @@ bootstrap_handoff_with_update_check() {
 
   local branch="$BRANCH"
   local update_state=0
+  local need_sync=0
+  local old_force_update="$BOOTSTRAP_FORCE_UPDATE"
 
   log "检查 GitHub 仓库是否有更新（分支：$branch）..."
   check_repo_remote_update "$BOOTSTRAP_DIR" "$branch"
@@ -772,34 +774,36 @@ do_update_from_github() {
   log "检查 GitHub 是否有更新（分支：$branch）..."
   check_repo_remote_update "$APP_DIR" "$branch"
   update_state=$?
-  if [[ "$update_state" -ne 0 ]]; then
-    if [[ "$update_state" -eq 1 ]]; then
-      echo "当前已是最新版本，无需更新。"
-      return
+  case "$update_state" in
+    0)
+      log "检测到新版本，开始强制同步更新..."
+      need_sync=1
+      ;;
+    1)
+      if repo_has_local_changes "$APP_DIR"; then
+        warn "检测到本地未提交改动，将以远端版本为准强制同步。"
+        need_sync=1
+      else
+        echo "当前已是最新版本，无需更新。"
+        return
+      fi
+      ;;
+    4)
+      warn "${CHECK_REPO_LAST_ERROR}，将以远端版本为准强制同步。"
+      need_sync=1
+      ;;
+    *)
+      die "检查远端更新失败：${CHECK_REPO_LAST_ERROR:-未知原因}"
+      ;;
+  esac
+
+  if [[ "$need_sync" -eq 1 ]]; then
+    BOOTSTRAP_FORCE_UPDATE="1"
+    if ! sync_repo_to_origin "$APP_DIR"; then
+      BOOTSTRAP_FORCE_UPDATE="$old_force_update"
+      die "同步远端版本失败，请检查网络或仓库权限。"
     fi
-
-    if [[ "$update_state" -eq 4 ]]; then
-      die "${CHECK_REPO_LAST_ERROR}，请先处理本地分支后再更新。"
-    fi
-
-    die "检查远端更新失败：${CHECK_REPO_LAST_ERROR:-未知原因}"
-  fi
-
-  if repo_has_local_changes "$APP_DIR"; then
-    warn "检测到本地未提交改动，已取消自动更新以避免覆盖。"
-    warn "请先提交或清理本地改动后再执行更新。"
-    return
-  fi
-
-  log "检测到新版本，开始更新..."
-  if ! git -C "$APP_DIR" checkout "$branch" >/dev/null 2>&1; then
-    if ! git -C "$APP_DIR" checkout -B "$branch" "origin/$branch" >/dev/null 2>&1; then
-      die "切换分支失败：$branch"
-    fi
-  fi
-
-  if ! git -C "$APP_DIR" merge --ff-only "origin/$branch"; then
-    die "更新失败：无法快进合并，请检查仓库状态。"
+    BOOTSTRAP_FORCE_UPDATE="$old_force_update"
   fi
 
   if service_is_running; then
