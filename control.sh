@@ -256,12 +256,13 @@ bootstrap_handoff_with_update_check() {
 
   local branch="$BRANCH"
   local update_state=0
-  local need_sync=0
-  local old_force_update="$BOOTSTRAP_FORCE_UPDATE"
 
   log "检查 GitHub 仓库是否有更新（分支：$branch）..."
-  check_repo_remote_update "$BOOTSTRAP_DIR" "$branch"
-  update_state=$?
+  if check_repo_remote_update "$BOOTSTRAP_DIR" "$branch"; then
+    update_state=0
+  else
+    update_state=$?
+  fi
 
   if [[ "$update_state" -eq 0 ]]; then
     log "检测到新版本，准备同步本地版本。"
@@ -770,10 +771,15 @@ do_update_from_github() {
 
   local branch="$BRANCH"
   local update_state=0
+  local need_sync=0
+  local old_force_update="$BOOTSTRAP_FORCE_UPDATE"
 
   log "检查 GitHub 是否有更新（分支：$branch）..."
-  check_repo_remote_update "$APP_DIR" "$branch"
-  update_state=$?
+  if check_repo_remote_update "$APP_DIR" "$branch"; then
+    update_state=0
+  else
+    update_state=$?
+  fi
   case "$update_state" in
     0)
       log "检测到新版本，开始强制同步更新..."
