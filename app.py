@@ -255,14 +255,7 @@ async def suffix_path_middleware(request: Request, call_next):
         request.scope["path"] = path[len(prefix) :] or "/"
         return await call_next(request)
 
-    if request.method in {"GET", "HEAD"}:
-        target = _with_url_prefix(path)
-        query = request.url.query
-        if query:
-            target = f"{target}?{query}"
-        return RedirectResponse(url=target, status_code=307)
-
-    return _render_http_error(request, 404, "目标资源不存在，可能已被删除或 URL 输入错误。")
+    return _render_http_error(request, 404, "当前已启用 URL_SUFFIX，请使用带安全后缀的完整地址访问。")
 
 _FETCH_CACHE: Dict[str, Tuple[float, str]] = {}
 _FETCH_CACHE_LOCK = threading.Lock()

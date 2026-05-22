@@ -3,6 +3,7 @@ import tempfile
 import unittest
 
 import app as appmod
+from fastapi.testclient import TestClient
 
 
 class TestAppSetupHelpers(unittest.TestCase):
@@ -79,6 +80,18 @@ class TestAppSetupHelpers(unittest.TestCase):
 
         appmod.URL_SUFFIX = ""
         self.assertTrue(appmod.require_url_suffix(""))
+
+    def test_suffix_middleware_requires_prefixed_url(self):
+        appmod.URL_SUFFIX = "abc123"
+
+        with TestClient(appmod.app) as client:
+            response = client.get("/", follow_redirects=False, headers={"accept": "application/json"})
+
+        self.assertEqual(response.status_code, 404)
+        self.assertEqual(
+            response.json(),
+            {"detail": "当前已启用 URL_SUFFIX，请使用带安全后缀的完整地址访问。"},
+        )
 
     def test_login_lock_after_three_failures(self):
         appmod.LOGIN_MAX_FAILS = 3
