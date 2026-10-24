@@ -1,52 +1,75 @@
 # SubConvert Manager
 
-订阅源管理与 Clash/V2Ray 转换网站，支持私有管理链接与公共 token 分发链接。
+> 轻量级订阅管理与代理格式转换工具，支持 Clash / V2Ray 双向互转、公共 Token 分发及安全路径隔离。
 
-仓库地址：`https://github.com/HlONGlin/subconvert-manager`
-
-## 主要功能
-
-- 首次部署自动进入 `/setup`，设置管理员账号密码
-- 管理三类源：`clash_url`、`clash_yaml`、`v2ray_text`
-- 在线转换：
-- Clash -> V2Ray（Base64 / Raw）
-- V2Ray -> Clash（play 模板）
-- 订阅输出：
-- 管理接口：`/s/{sid}/...`
-- 公共接口：`/pub/s/{sid}/...?token=...`
-- 登录鉴权：Basic Auth + Session
-- 公共订阅鉴权：`SUB_TOKEN`
-
-## 控制脚本
-
-- [control.sh](https://github.com/HlONGlin/subconvert-manager/blob/main/control.sh)
-
-用于安装/更新、重启/停止、换端口、查看访问 URL。
+[![Python](https://img.shields.io/badge/Python-3.9%2B-blue?logo=python&logoColor=white)](https://python.org)
+[![FastAPI](https://img.shields.io/badge/FastAPI-0.110%2B-009688?logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com)
+[![License](https://img.shields.io/badge/License-MIT-green)](LICENSE)
 
 ---
 
-## Linux 一键部署（curl）
+## 目录
 
+- [功能概览](#功能概览)
+- [快速部署](#快速部署)
+  - [一键部署（curl）](#一键部署curl)
+  - [手动部署（git clone）](#手动部署git-clone)
+  - [Windows 部署](#windows-部署)
+- [常用管理命令](#常用管理命令)
+- [关键配置](#关键配置)
+- [故障排查](#故障排查)
+- [变更记录](#变更记录)
 
+---
+
+## 功能概览
+
+| 功能 | 说明 |
+|------|------|
+| 🔐 管理员初始化 | 首次访问自动跳转 `/setup`，引导设置账号密码 |
+| 📦 订阅源管理 | 支持 `clash_url` / `clash_yaml` / `v2ray_text` 三种来源 |
+| 🔄 在线格式转换 | Clash → V2Ray（Base64 / Raw）、V2Ray → Clash（play 模板）|
+| 🔗 私有订阅接口 | `/s/{sid}/v2ray`、`/s/{sid}/clash` 需登录访问 |
+| 🌐 公共订阅接口 | `/pub/s/{sid}/...?token=...` 供客户端直接使用 |
+| 🛡️ 安全路径隔离 | `URL_SUFFIX` 为所有路由加路径前缀，防止扫描 |
+| 🚦 登录保护 | 连续失败锁定，支持 Basic Auth + Session 双模式 |
+
+---
+
+## 快速部署
+
+### 一键部署（curl）
+
+适合全新服务器，脚本会自动拉取仓库、安装依赖并注册系统服务。
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/HlONGlin/subconvert-manager/main/control.sh | sudo bash
 ```
 
-使用流程（新版控制器）：
+> 没有 `curl`？用 `wget -O - <url> | sudo bash` 替代。
 
-1. 运行脚本后直接进入完整控制菜单
-2. 选择第一个按钮 `1) 部署环境（下载仓库并安装）`
-3. 脚本会自动从 GitHub 拉取完整仓库到本地并完成部署，随后进入本地仓库内的完整控制器
+运行后进入交互菜单，选择 **`1) 部署环境`** 即可。脚本会：
 
-这个命令会：
+1. 将完整仓库克隆到 `/opt/subconvert-manager`
+2. 自动安装 Python 依赖（virtualenv）
+3. 注册并启动系统服务
+4. 打印访问地址与初始化链接
 
-- 先进入 `control.sh` 完整菜单
-- 选择 `1) 部署环境（下载仓库并安装）` 后，自动拉取完整仓库到 `/opt/subconvert-manager` 并完成首次部署
+**自定义目标目录：**
+
+```bash
+curl -fsSL .../control.sh | sudo env BOOTSTRAP_DIR=/data/subconvert-manager bash
+```
+
+**指定分支或私有仓库：**
+
+```bash
+curl -fsSL .../control.sh | sudo env REPO_URL=https://github.com/你的账号/仓库.git BRANCH=main bash
+```
 
 ---
 
-## Linux 普通部署（git clone）
+### 手动部署（git clone）
 
 ```bash
 cd /opt
@@ -55,31 +78,29 @@ cd subconvert-manager
 sudo bash control.sh
 ```
 
-在菜单中选 `1) Install / Update`。
+在菜单中选 **`1) 安装或更新`**。
 
-安装脚本会自动识别常见发行版包管理器：
+**支持的包管理器：**
 
-- Debian/Ubuntu: `apt`
-- RHEL/CentOS/Rocky/Alma/Fedora: `dnf` / `yum`
-- openSUSE: `zypper`
-- Arch: `pacman`
-- Alpine: `apk`
+| 发行版 | 包管理器 |
+|--------|---------|
+| Debian / Ubuntu | `apt` |
+| RHEL / CentOS / Rocky / Fedora | `dnf` / `yum` |
+| openSUSE | `zypper` |
+| Arch Linux | `pacman` |
+| Alpine | `apk` |
 
-服务管理器支持：
-
-- `systemd`
-- `openrc`
-- `sysv init` (`service`)
+**支持的服务管理器：** `systemd` · `openrc` · `sysv init`
 
 ---
 
-## Windows 部署
+### Windows 部署
 
-### 方案 A：WSL（推荐）
+**方案 A：WSL（推荐）**
 
-在 WSL 内按 Linux 部署步骤执行即可。
+在 WSL 内按 Linux 步骤执行即可。
 
-### 方案 B：Windows 原生（PowerShell）
+**方案 B：PowerShell 原生**
 
 ```powershell
 cd C:\path\to\subconvert-manager
@@ -92,63 +113,74 @@ py -3 -m venv .venv
 
 ---
 
-## 一键部署不能用时怎么调整
-
-### 1) 机器没有 curl
-
-改用 wget：
+## 常用管理命令
 
 ```bash
-wget -O - https://raw.githubusercontent.com/HlONGlin/subconvert-manager/main/control.sh | sudo bash
+sudo bash control.sh      # 进入交互控制菜单（推荐）
+sudo bash install.sh      # 仅执行安装/更新
+sudo bash uninstall.sh    # 卸载并删除全部文件（含 data/）
 ```
 
-### 2) 无法访问 raw.githubusercontent.com
+**菜单功能一览：**
 
-改为手动 clone：
-
-```bash
-cd /opt
-git clone https://github.com/HlONGlin/subconvert-manager subconvert-manager
-cd subconvert-manager
-sudo bash install.sh
+```
+1) 安装或更新          5) 查看服务状态与访问地址
+2) 卸载               6) 修改自定义端口
+3) 重启服务            7) 仅显示访问地址
+4) 停止服务            8) 从 GitHub 更新版本
+                      9) 设置 URL 安全后缀
 ```
 
-### 3) 没有 root 权限
+> ⚠️ `uninstall.sh` 会删除整个部署目录，包含代码、`.venv` 和 `data/`，操作不可恢复。
 
-- 一键脚本和安装脚本都需要 root（需要写服务文件、安装依赖）
-- 请切换 root 或使用 `sudo`
+---
 
-### 4) 想把仓库拉到别的目录
+## 关键配置
 
-一键命令可带环境变量：
+配置文件位于 `config.env`（参考 `config.env.example`）：
 
-```bash
-curl -fsSL https://raw.githubusercontent.com/HlONGlin/subconvert-manager/main/control.sh | sudo env BOOTSTRAP_DIR=/data/subconvert-manager bash
+```ini
+# 监听端口（auto = 安装时自动选择空闲端口）
+PORT=8000
+
+# 管理员账号（首次访问 /setup 设置后自动写入）
+BASIC_AUTH_USER=
+BASIC_AUTH_PASS=
+
+# Session 加密密钥（首次 /setup 自动生成，也可手动指定）
+SESSION_SECRET=
+
+# 公共订阅鉴权 Token（客户端订阅链接使用）
+SUB_TOKEN=
+
+# URL 安全后缀（启用后访问路径需带此前缀，例如 /abc12/）
+URL_SUFFIX=
 ```
 
-### 5) 想固定分支或私有仓库地址
+**完整配置项请参考 [`config.env.example`](config.env.example)。**
 
-```bash
-curl -fsSL https://raw.githubusercontent.com/HlONGlin/subconvert-manager/main/control.sh | sudo env REPO_URL=https://github.com/HlONGlin/subconvert-manager.git BRANCH=main bash
-```
+> 建议上线后立刻完成 `/setup`，并在反向代理侧启用 HTTPS。
 
-### 6) 报错：`Your local changes to the following files would be overwritten by merge`
+---
 
-- 新版 `control.sh` 在“1) 部署环境（下载仓库并安装）”时，必须先同步 `origin/main`。
-- 如果检测到本地代码改动，会自动强制覆盖代码，并保留 `config.env` 和 `data/` 后再同步。
-- 你也可以直接手动强制同步后再部署：
+## 故障排查
+
+<details>
+<summary><b>报错：<code>Your local changes would be overwritten by merge</code></b></summary>
+
+控制脚本在检测到本地改动时会自动保留 `config.env` 和 `data/` 后强制覆盖代码。
+也可手动触发强制同步：
 
 ```bash
 BOOTSTRAP_FORCE_UPDATE=1 sudo bash control.sh
 ```
 
-### 7) 报错：`pip not found in virtualenv`
+</details>
 
-如果安装日志出现：
+<details>
+<summary><b>报错：<code>pip not found in virtualenv</code></b></summary>
 
-`ERROR: pip not found in virtualenv: /opt/subconvert-manager/.venv/bin/pip`
-
-执行下面命令修复后再安装：
+重建虚拟环境后重新安装：
 
 ```bash
 cd /opt/subconvert-manager
@@ -159,26 +191,57 @@ python3 -m venv .venv
 sudo bash install.sh
 ```
 
----
+</details>
 
-## 常用管理命令
+<details>
+<summary><b>无法访问 raw.githubusercontent.com</b></summary>
+
+改为手动 clone：
 
 ```bash
-sudo bash control.sh
+cd /opt
+git clone https://github.com/HlONGlin/subconvert-manager subconvert-manager
+cd subconvert-manager
 sudo bash install.sh
-sudo bash uninstall.sh
 ```
 
-> 注意：`uninstall.sh` 现在会删除整个部署目录（含代码、`.venv`、`data/`）。
+</details>
 
-## 关键配置
+<details>
+<summary><b>没有 root 权限</b></summary>
 
-`config.env` 常用项：
+安装脚本需要 root 来写服务文件和安装系统依赖，请使用 `sudo` 或切换到 root 用户后再执行。
 
-- `PORT`
-- `BASIC_AUTH_USER` / `BASIC_AUTH_PASS`
-- `SUB_TOKEN`
-- `SESSION_SECRET`
-- `DATA_FILE`
+</details>
 
-建议上线后立刻完成 `/setup`，并在反向代理中启用 HTTPS。
+---
+
+## 变更记录
+
+### 未发布
+
+- **新增** ClashPlay 风格"部署型"Clash 输出模板（`template=play`）
+- **新增** 订阅源维度的默认模板与限速字段：`clash_template` / `rate_limit_mbps`
+- **新增** 全局异常处理与统一中文错误页
+- **新增** 拉取内容大小限制（默认 2 MB，可通过 `MAX_REMOTE_BYTES` 配置）
+- **增强** UI 统一视觉规范：卡片、表格、按钮、空态、复制、Toast
+- **增强** 互转页新增模板选择与限速参数
+- **增强** 首页安全提醒（默认口令 / Token 缺失高亮提示）
+- **工程化** 增加基础单元测试，补齐文档说明
+- **安全** 修复 `SESSION_SECRET` 弱默认值，改为运行时随机生成
+- **修复** `control.sh` 中 `project_status_text` 的 `$?` 状态捕获逻辑
+- **修复** `is_port_available` 中 heredoc 变量插值风险
+- **修复** `set_env_key` 中 `sed` 替换值特殊字符转义
+
+### 2026-02-17
+
+- **修复** 401 未认证提示中文化
+- **增强** 增加 `/favicon.ico` 空响应，避免浏览器反复 404
+
+---
+
+<div align="center">
+
+仓库地址：[github.com/HlONGlin/subconvert-manager](https://github.com/HlONGlin/subconvert-manager)
+
+</div>
