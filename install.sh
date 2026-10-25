@@ -403,7 +403,7 @@ ensure_data_file() {
 run_self_check() {
   local py_bin="$VENV_DIR/bin/python"
   log "Running syntax self-check"
-  "$py_bin" -m py_compile "$APP_DIR/app.py" "$APP_DIR/converter.py" "$APP_DIR/storage.py"
+  "$py_bin" -m py_compile "$APP_DIR/app.py" "$APP_DIR/converter.py" "$APP_DIR/protocols.py" "$APP_DIR/storage.py"
 }
 
 write_systemd_service() {

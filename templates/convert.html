@@ -22,7 +22,7 @@
 
     <div class="grid">
       <div class="card" data-state-region="convert-clash">
-        <h3>Clash → V2Ray</h3>
+        <h3>Clash → 分享链接</h3>
         <div class="hint" style="margin-top:6px;">支持远程订阅 URL 或上传本地 YAML 文件。</div>
         <hr class="sep"/>
 
@@ -41,8 +41,8 @@
           <div class="row">
             <label for="clash-out">输出格式</label>
             <select id="clash-out" name="out" aria-label="选择输出格式">
-              <option value="base64">V2Ray Base64 订阅</option>
-              <option value="raw">V2Ray Raw 多行 URI</option>
+              <option value="base64">Base64 订阅</option>
+              <option value="raw">Raw 多行 URI</option>
             </select>
           </div>
 
@@ -53,19 +53,19 @@
       </div>
 
       <div class="card" data-state-region="convert-v2ray">
-        <h3>V2Ray → Clash</h3>
+        <h3>分享链接 → Clash</h3>
         <div class="hint" style="margin-top:6px;">支持粘贴多行 URI，或直接粘贴 Base64 订阅文本。</div>
         <hr class="sep"/>
 
         <form action="{{ url_prefix }}/convert/v2ray_to_clash" method="post" data-lock-submit>
           <div class="row">
-            <label for="v2ray-text">V2Ray 输入内容</label>
+            <label for="v2ray-text">订阅内容</label>
             <textarea
               id="v2ray-text"
               name="text"
               class="out"
               style="height:220px;"
-              placeholder="vmess://...\nvless://...\ntrojan://...\nss://...\n\n或 Base64 订阅文本"
+              placeholder="vless://...\nhy2://...\ntuic://...\nanytls://..."
               required
               aria-label="输入 V2Ray 文本"
             ></textarea>
