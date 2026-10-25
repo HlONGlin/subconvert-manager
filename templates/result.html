@@ -25,6 +25,17 @@
       <div class="hint">可直接复制结果。</div>
     </div>
 
+    {% if issues %}
+    <section class="state-block" role="status" style="margin-bottom:12px; overflow-wrap:anywhere;">
+      <div class="state-title">转换记录</div>
+      <ul>
+        {% for issue in issues %}
+        <li>#{{ issue.index }} · {{ issue.protocol }} · {{ "已跳过" if issue.severity == "error" else "参数提示" }}：{{ issue.reason }}</li>
+        {% endfor %}
+      </ul>
+    </section>
+    {% endif %}
+
     <div class="card result-card">
       <div class="result-actions">
         <button class="btn primary" type="button" data-copy="#out" aria-label="复制输出内容">复制结果</button>

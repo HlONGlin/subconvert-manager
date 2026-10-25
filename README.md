@@ -11,6 +11,7 @@
 ## 目录
 
 - [功能概览](#功能概览)
+- [协议支持](#协议支持)
 - [快速部署](#快速部署)
   - [一键部署（curl）](#一键部署curl)
   - [手动部署（git clone）](#手动部署git-clone)
@@ -33,6 +34,54 @@
 | 🌐 公共订阅接口 | `/pub/s/{sid}/...?token=...` 供客户端直接使用 |
 | 🛡️ 安全路径隔离 | `URL_SUFFIX` 为所有路由加路径前缀，防止扫描 |
 | 🚦 登录保护 | 连续失败锁定，支持 Basic Auth + Session 双模式 |
+
+---
+
+## 协议支持
+
+当前实现 **14 种协议的分享链接与 Clash/Mihomo YAML 双向转换**。别名合并计数，HTTP/HTTPS 算一种，TLS、Reality、WS 等不单独计为代理协议。
+
+| 协议 | 分享链接前缀 | 范围 |
+|------|--------------|------|
+| VMess | `vmess://` | V2RayN Base64 JSON、VMess AEAD URI |
+| VLESS | `vless://` | TLS、Reality、flow、指纹 |
+| Trojan | `trojan://` | 默认 TLS，保留传输及 TLS 参数 |
+| Shadowsocks | `ss://`、`shadowsocks://` | SIP002、旧式整体 Base64、SS2022、obfs/v2ray-plugin |
+| ShadowsocksR | `ssr://` | protocol、obfs、备注及扩展参数 |
+| SOCKS5 | `socks://`、`socks5://`、`socks5h://` | 无认证、明文/百分号编码或 Base64 认证 |
+| HTTP/HTTPS | `http://`、`https://` | 认证、TLS、SNI、证书校验选项 |
+| Hysteria 1 | `hysteria://` | 字符串认证、混淆、上下行速率 |
+| Hysteria 2 | `hysteria2://`、`hy2://` | 认证、Salamander、端口跳跃、SNI、证书指纹 |
+| TUIC | `tuic://` | v4 token / v5 UUID+密码、拥塞控制、UDP 模式、ALPN |
+| AnyTLS | `anytls://` | 密码、SNI、证书校验，默认 443 |
+| Mieru | `mieru://`、`mierus://` | 用户名/密码、多组端口/传输、端口范围、multiplexing |
+| WireGuard | `wireguard://` | v2rayN 格式，单 peer、双栈接口地址、密钥、reserved、MTU、DNS |
+| SSH | `ssh://` | 用户名/密码认证，默认 22；密钥认证和主机密钥固定使用原生 YAML |
+
+VMess / VLESS / Trojan 支持 TCP、WS、gRPC、HTTP 伪装、H2、HTTPUpgrade，以及 Mihomo 可表达的 XHTTP 基础参数与部分 extra/reuse 设置。XHTTP downloadSettings 等未映射的配置会明确拒绝转换，保留原生 YAML。
+
+输入可为多行 URI 或标准/URL-safe Base64 订阅。Mieru 多组端口会展开为多个节点；重复名称和 `DIRECT` 等保留名称会自动消歧。IPv6 地址和密码特殊字符按 URI 规则处理。
+
+### 原生 YAML 与转换限制
+
+Snell、ShadowQUIC、Gost Relay、Sudoku、MASQUE、TrustTunnel、OpenVPN、Tailscale、ZeroTier、EasyTier **目前仅支持原生 YAML 原样分发**，未实现分享链接转换。不要把这个列表理解为这些协议在其他客户端没有分享格式；本项目没有为它们声明兼容的 URI 编解码器。
+
+WireGuard 多 peer / Amnezia 配置、SSH 密钥和 host-key、ECH、自定义证书、realm 设置、未知 SS 插件等同样应保留原生 YAML。`clash_yaml` / `clash_url` 来源输出 Clash 时保留原文，包括所有协议及参数；能否连接取决于客户端内核版本。
+
+分享格式无法完整表达所有 YAML 设置。网页转换会显示节点跳过原因和未保留字段，单个坏节点不会中断整批转换；全部失败时返回带原因的 HTTP 422。公共/私有订阅响应增加 `X-Conversion-Skipped` 和 `X-Conversion-Warnings` 计数头，诊断不输出原始链接或密码。`v2ray_text` 到 Raw/Base64 的分发仍为原文透传。
+
+`/v2ray` 与 `/v2ray_raw` 接口名为兼容旧订阅保留，输出可能包含 Hysteria、TUIC 等其他协议；接收客户端必须支持对应协议。
+
+### 开发验证
+
+```bash
+python -m pip install -r requirements-dev.txt
+python -m unittest discover -s tests -v
+```
+
+可选内核配置校验：将环境变量 `MIHOMO_BINARY` 设为本机 Mihomo 可执行文件路径后运行同一测试命令，测试会调用内核的 `-t` 检查生成配置；未设置时自动跳过。配置校验不等于真实服务器连通性测试。
+
+格式参考：[Mihomo 订阅转换](https://github.com/MetaCubeX/mihomo/blob/Meta/common/convert/converter.go)、[SIP002](https://shadowsocks.org/doc/sip002.html)、[AnyTLS URI](https://github.com/anytls/anytls-go/blob/main/docs/uri_scheme.md)、[WireGuard v2rayN 格式](https://github.com/2dust/v2rayN/blob/master/v2rayN/ServiceLib/Handler/Fmt/WireguardFmt.cs)。
 
 ---
 

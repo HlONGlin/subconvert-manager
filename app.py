@@ -520,6 +520,26 @@ def _parse_clash_yaml_text(text: str) -> dict:
     return doc
 
 
+def _conversion_failure(issues: List[dict]) -> HTTPException:
+    reasons = "; ".join(
+        f"#{item['index']} {item['protocol']}: {item['reason']}"
+        for item in issues[:8]
+    )
+    return HTTPException(
+        status_code=422,
+        detail="未解析到可转换节点" + (": " + reasons if reasons else ""),
+    )
+
+
+def _conversion_response(body: str, issues: List[dict]) -> PlainTextResponse:
+    skipped = sum(item["severity"] == "error" for item in issues)
+    warnings = sum(item["severity"] == "warning" for item in issues)
+    return PlainTextResponse(body, headers={
+        "X-Conversion-Skipped": str(skipped),
+        "X-Conversion-Warnings": str(warnings),
+    })
+
+
 def _load_db() -> Dict[str, object]:
     db = load_json(DATA_FILE)
     if not isinstance(db, dict):
@@ -728,16 +748,17 @@ async def clash_to_v2ray_web(
         source = "远程链接"
 
     doc = _parse_clash_yaml_text(text)
-    uris = clash_yaml_to_v2ray_uris(doc)
+    issues: List[dict] = []
+    uris = clash_yaml_to_v2ray_uris(doc, issues=issues)
     if not uris:
-        raise HTTPException(status_code=422, detail="未解析到可转换节点")
+        raise _conversion_failure(issues)
 
     raw = "\n".join(uris) + "\n"
     b64 = uris_to_v2ray_subscription_base64(uris)
     output = b64 if out == "base64" else raw
     return templates.TemplateResponse(
         "result.html",
-        _template_context(request, title="Clash -> V2Ray", source=source, count=len(uris), output=output),
+        _template_context(request, title="Clash -> URI", source=source, count=len(uris), output=output, issues=issues),
     )
 
 
@@ -760,16 +781,17 @@ async def v2ray_to_clash_web(
         raise HTTPException(status_code=400, detail="Invalid rate limit")
 
     uris = split_v2ray_text((text or "").strip())
-    proxies = v2ray_uris_to_clash_proxies(uris)
+    issues: List[dict] = []
+    proxies = v2ray_uris_to_clash_proxies(uris, issues=issues)
     if not proxies:
-        raise HTTPException(status_code=422, detail="未解析到可转换节点")
+        raise _conversion_failure(issues)
 
     doc = build_clashplay_yaml(proxies, rate_limit_mbps=rate_limit)
 
     y = yaml.safe_dump(doc, allow_unicode=True, sort_keys=False)
     return templates.TemplateResponse(
         "result.html",
-        _template_context(request, title="V2Ray -> Clash", source="文本输入", count=len(proxies), output=y),
+        _template_context(request, title="URI -> Clash", source="文本输入", count=len(proxies), output=y, issues=issues),
     )
 
 
@@ -865,18 +887,18 @@ def source_delete(sid: str, _=Depends(require_admin_auth)):
     return RedirectResponse(url=_with_url_prefix("/?toast=删除成功"), status_code=303)
 
 
-def _resolve_to_uris(src: dict) -> List[str]:
+def _resolve_to_uris(src: dict, issues: Optional[List[dict]] = None) -> List[str]:
     kind = (src or {}).get("kind")
     value = (src or {}).get("value") or ""
 
     if kind == "clash_url":
         text = _fetch_text(str(value))
         doc = _parse_clash_yaml_text(text)
-        return clash_yaml_to_v2ray_uris(doc)
+        return clash_yaml_to_v2ray_uris(doc, issues=issues)
 
     if kind == "clash_yaml":
         doc = _parse_clash_yaml_text(str(value))
-        return clash_yaml_to_v2ray_uris(doc)
+        return clash_yaml_to_v2ray_uris(doc, issues=issues)
 
     if kind == "v2ray_text":
         return split_v2ray_text(str(value))
@@ -884,7 +906,7 @@ def _resolve_to_uris(src: dict) -> List[str]:
     return []
 
 
-def _resolve_to_clash_yaml(src: dict, template: str = "") -> str:
+def _resolve_to_clash_yaml(src: dict, template: str = "", issues: Optional[List[dict]] = None) -> str:
     kind = (src or {}).get("kind")
     value = (src or {}).get("value") or ""
     _normalize_clash_template(template)
@@ -895,9 +917,9 @@ def _resolve_to_clash_yaml(src: dict, template: str = "") -> str:
         return str(value)
 
     uris = split_v2ray_text(str(value))
-    proxies = v2ray_uris_to_clash_proxies(uris)
+    proxies = v2ray_uris_to_clash_proxies(uris, issues=issues)
     if not proxies:
-        raise HTTPException(status_code=422, detail="No usable node")
+        raise _conversion_failure(issues or [])
     doc = build_clashplay_yaml(proxies, rate_limit_mbps=_safe_int((src or {}).get("rate_limit_mbps"), 0))
     return yaml.safe_dump(doc, allow_unicode=True, sort_keys=False)
 
@@ -912,46 +934,52 @@ def _source_or_404(sid: str) -> dict:
 
 @app.get("/s/{sid}/v2ray", response_class=PlainTextResponse)
 def sub_v2ray_b64(sid: str, _=Depends(require_admin_auth)):
-    uris = _resolve_to_uris(_source_or_404(sid))
+    issues: List[dict] = []
+    uris = _resolve_to_uris(_source_or_404(sid), issues=issues)
     if not uris:
-        raise HTTPException(status_code=422, detail="No usable node")
-    return uris_to_v2ray_subscription_base64(uris)
+        raise _conversion_failure(issues)
+    return _conversion_response(uris_to_v2ray_subscription_base64(uris), issues)
 
 
 @app.get("/s/{sid}/v2ray_raw", response_class=PlainTextResponse)
 def sub_v2ray_raw(sid: str, _=Depends(require_admin_auth)):
-    uris = _resolve_to_uris(_source_or_404(sid))
+    issues: List[dict] = []
+    uris = _resolve_to_uris(_source_or_404(sid), issues=issues)
     if not uris:
-        raise HTTPException(status_code=422, detail="No usable node")
-    return "\n".join(uris) + "\n"
+        raise _conversion_failure(issues)
+    return _conversion_response("\n".join(uris) + "\n", issues)
 
 
 @app.get("/s/{sid}/clash", response_class=PlainTextResponse)
 def sub_clash(sid: str, template: str = "", _=Depends(require_admin_auth)):
-    y = _resolve_to_clash_yaml(_source_or_404(sid), template=template)
-    return y if y.endswith("\n") else y + "\n"
+    issues: List[dict] = []
+    y = _resolve_to_clash_yaml(_source_or_404(sid), template=template, issues=issues)
+    return _conversion_response(y if y.endswith("\n") else y + "\n", issues)
 
 
 @app.get("/pub/s/{sid}/v2ray", response_class=PlainTextResponse)
 def pub_v2ray_b64(sid: str, token: str = ""):
     require_sub_token(token)
-    uris = _resolve_to_uris(_source_or_404(sid))
+    issues: List[dict] = []
+    uris = _resolve_to_uris(_source_or_404(sid), issues=issues)
     if not uris:
-        raise HTTPException(status_code=422, detail="No usable node")
-    return uris_to_v2ray_subscription_base64(uris)
+        raise _conversion_failure(issues)
+    return _conversion_response(uris_to_v2ray_subscription_base64(uris), issues)
 
 
 @app.get("/pub/s/{sid}/v2ray_raw", response_class=PlainTextResponse)
 def pub_v2ray_raw(sid: str, token: str = ""):
     require_sub_token(token)
-    uris = _resolve_to_uris(_source_or_404(sid))
+    issues: List[dict] = []
+    uris = _resolve_to_uris(_source_or_404(sid), issues=issues)
     if not uris:
-        raise HTTPException(status_code=422, detail="No usable node")
-    return "\n".join(uris) + "\n"
+        raise _conversion_failure(issues)
+    return _conversion_response("\n".join(uris) + "\n", issues)
 
 
 @app.get("/pub/s/{sid}/clash", response_class=PlainTextResponse)
 def pub_clash(sid: str, token: str = "", template: str = ""):
     require_sub_token(token)
-    y = _resolve_to_clash_yaml(_source_or_404(sid), template=template)
-    return y if y.endswith("\n") else y + "\n"
+    issues: List[dict] = []
+    y = _resolve_to_clash_yaml(_source_or_404(sid), template=template, issues=issues)
+    return _conversion_response(y if y.endswith("\n") else y + "\n", issues)

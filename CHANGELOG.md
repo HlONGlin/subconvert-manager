@@ -2,6 +2,11 @@
 
 ## 未发布
 
+- [新增] 14 种协议的分享链接双向转换：VMess、VLESS、Trojan、SS、SSR、SOCKS5、HTTP/HTTPS、Hysteria 1/2、TUIC、AnyTLS、Mieru、WireGuard、SSH
+- [增强] SS 插件及 SS2022、IPv6、特殊字符密码、Mieru 多端口、Hysteria2 端口跳跃、更多传输和 TLS 参数
+- [修复] Trojan 省略 security 时默认 TLS，避免字符串 false 被当作真；坏节点隔离及节点重名处理
+- [新增] 网页转换诊断、公私有订阅的跳过/警告数量响应头，未实现或不兼容设置明确提示
+- [工程化] 协议编解码统一注册，增加完整转换、路由和鉴权回归测试与开发依赖说明
 - [新增] ClashPlay 风格“部署型”Clash 输出模板（`template=play`）
 - [新增] 订阅源维度的默认模板与限速字段：`clash_template` / `rate_limit_mbps`
 - [新增] 全局异常处理与统一中文错误页（避免直接暴露 JSON/堆栈）
