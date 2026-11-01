@@ -15,6 +15,16 @@ class TestConverter(unittest.TestCase):
         out = split_v2ray_text("\n\nvmess://a\n\n")
         self.assertEqual(out, ["vmess://a"])
 
+    def test_split_v2ray_text_escaped_line_breaks(self):
+        raw = "vless://id@example.com:443#香港1(al)\\nanytls://pass@example.com:443#香港1(af)"
+        self.assertEqual(
+            split_v2ray_text(raw),
+            [
+                "vless://id@example.com:443#香港1(al)",
+                "anytls://pass@example.com:443#香港1(af)",
+            ],
+        )
+
 
     def test_split_concatenated_uri_records(self):
         text = "vless://a@one.example:443#日本1ss://b@two.example:443#美国1"

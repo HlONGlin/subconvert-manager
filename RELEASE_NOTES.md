@@ -1,3 +1,18 @@
+# v1.0.1
+
+## Highlights
+
+- Fix `v2ray_text` sources where escaped line breaks caused adjacent proxy URIs to be merged.
+- Support literal `\\n`, `\\r\\n`, and HTML `<br>` separators.
+- Add regression coverage for mixed VLESS and AnyTLS subscriptions.
+
+## Verification
+
+- 63 unit tests pass.
+- Mihomo schema integration remains skipped unless `MIHOMO_BINARY` is configured.
+
+---
+
 # v1.0.0
 
 ## Highlights
