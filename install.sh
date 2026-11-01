@@ -16,6 +16,9 @@ VENV_DIR="$APP_DIR/.venv"
 PYTHON_BIN="${PYTHON_BIN:-}"
 UVICORN_HOST="${UVICORN_HOST:-0.0.0.0}"
 SERVICE_MGR="${SERVICE_MGR:-}"
+# Existing deployments keep their configured port during an update, even
+# while the old service is still running and temporarily holds that port.
+EXISTING_DEPLOYMENT=0
 
 log() {
   printf '[%s] %s\n' "$(date '+%Y-%m-%d %H:%M:%S')" "$*"
@@ -147,6 +150,11 @@ install_system_packages() {
 }
 
 ensure_env_file() {
+  if [[ -f "$ENV_FILE" ]]; then
+    EXISTING_DEPLOYMENT=1
+    return
+  fi
+
   if [[ ! -f "$ENV_FILE" ]]; then
     cat >"$ENV_FILE" <<'EOF'
 PORT=auto
@@ -264,6 +272,11 @@ normalize_port() {
   fi
 
   if [[ "$(is_port_available "$raw")" != "1" ]]; then
+    if [[ "$EXISTING_DEPLOYMENT" == "1" ]]; then
+      log "Existing deployment detected; keeping configured PORT=$raw during update."
+      echo "$raw"
+      return
+    fi
     warn "PORT=$raw is in use, auto-selecting another free port"
     raw="$(pick_free_port)"
     set_env_key "PORT" "$raw"

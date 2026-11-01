@@ -633,6 +633,12 @@ prompt_install_port_choice() {
 
   input_port="$(printf '%s' "$input_port" | tr -d '[:space:]')"
   if [[ -z "$input_port" ]]; then
+    current_port="$(get_env_key PORT)"
+    if [[ -f "$ENV_FILE" ]] && is_valid_port "$current_port"; then
+      printf -v "$__var_name" '%s' "$current_port"
+      log "检测到已有部署，回车将保留当前端口：$current_port"
+      return 0
+    fi
     printf -v "$__var_name" '%s' "auto"
     return 0
   fi
