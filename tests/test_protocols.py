@@ -134,6 +134,28 @@ class TestExternalShareFormats(unittest.TestCase):
     def test_anytls_user_password_variant(self):
         self.assertEqual(self.parse("anytls://user:pass@example.com:443")["password"], "pass")
 
+    def test_anytls_tls_parameters_are_preserved(self):
+        uri = ("anytls://secret@example.com:443?insecure=1&security=tls&fp=chrome"
+               "&type=tcp&headerType=none#anytls")
+        node = self.parse(uri)
+        self.assertTrue(node["tls"])
+        self.assertTrue(node["skip-cert-verify"])
+        self.assertEqual(node["client-fingerprint"], "chrome")
+        ok, exported = clash_proxy_to_uri(node)
+        self.assertTrue(ok, exported)
+        self.assertEqual(self.parse(exported), node)
+        self.assertEqual(parse_qs(urlsplit(exported).query)["security"], ["tls"])
+
+    def test_anytls_reality_is_rejected(self):
+        issues = []
+        self.assertEqual(
+            v2ray_uris_to_clash_proxies(
+                ["anytls://secret@example.com:443?security=reality&pbk=public"], issues
+            ),
+            [],
+        )
+        self.assertIn("Reality", issues[0]["reason"])
+
     def test_ss_legacy_full_base64(self):
         node = self.parse("ss://" + b64("aes-128-gcm:secret@[2001:db8::1]:8388") + "#legacy")
         self.assertEqual(node["server"], "2001:db8::1")
@@ -216,6 +238,13 @@ class TestExternalShareFormats(unittest.TestCase):
         self.assertEqual(node["uuid"], UUID)
         self.assertTrue(node["tls"])
         self.assertEqual(node["ws-opts"]["path"], "/ws")
+
+    def test_vmess_udp_false_is_preserved(self):
+        node = dict(fixtures()[0], udp=False)
+        issues = []
+        uris = clash_yaml_to_v2ray_uris({"proxies": [node]}, issues)
+        self.assertEqual(issues, [])
+        self.assertEqual(v2ray_uris_to_clash_proxies(uris)[0]["udp"], False)
 
     def test_wireguard_v2rayn_format(self):
         uri = "wireguard://" + quote(KEY, safe="") + "@example.com:51820?" + urlencode({

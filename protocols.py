@@ -177,10 +177,18 @@ def _tls_in(proxy, query):
     pin = _first(query, "pinSHA256", "hpkp", "pcs")
     if pin:
         proxy["fingerprint"] = pin
-    if kind in ("vmess", "vless", "trojan"):
-        security = _first(query, "security", default="tls" if kind == "trojan" else "none").lower()
+    if kind in ("vmess", "vless", "trojan", "anytls"):
+        # AnyTLS links may explicitly carry the Xray-style security option.
+        # Preserve it so Mihomo receives the required tls: true field.
+        security_value = _first(query, "security")
+        security = (security_value if security_value is not None else
+                    ("tls" if kind == "trojan" else "none")).lower()
         if security not in ("none", "tls", "reality", ""):
             raise ProtocolError("unsupported TLS security mode")
+        if kind == "anytls" and security == "reality":
+            raise ProtocolError("AnyTLS does not support Reality")
+        if kind == "anytls" and security_value is None and _first(query, "tls") is None:
+            return
         proxy["tls"] = security in ("tls", "reality") or _bool(_first(query, "tls"))
         pbk = _first(query, "pbk", "public-key")
         sid = _first(query, "sid", "short-id")
@@ -219,6 +227,8 @@ def _tls_out(proxy):
                 params["sid"] = reality["short-id"]
             if "support-x25519mlkem768" in reality:
                 params["support-x25519mlkem768"] = str(_bool(reality["support-x25519mlkem768"])).lower()
+    elif proxy["type"] == "anytls" and "tls" in proxy:
+        params["security"] = "tls" if _bool(proxy["tls"]) else "none"
     return params
 
 
@@ -438,6 +448,8 @@ def _parse_vmess(uri):
     for key in ("sni", "alpn", "fp", "allowInsecure", "insecure", "ed", "eh", "method"):
         if key in obj:
             query[key] = [str(obj[key])]
+    if "udp" in obj:
+        query["udp"] = [str(obj["udp"])]
     _tls_in(proxy, query)
     _transport_in(proxy, query)
     return [proxy]
@@ -738,6 +750,7 @@ def export_uri(proxy):
                 raise ProtocolError("invalid VMess alterId")
             advanced = (proxy.get("network") == "xhttp" or proxy.get("reality-opts")
                         or proxy.get("packet-addr") or proxy.get("xudp") or proxy.get("fingerprint")
+                        or "udp" in proxy
                         or (proxy.get("http-opts") or {}).get("method")
                         or (proxy.get("ws-opts") or {}).get("max-early-data")
                         or (proxy.get("ws-opts") or {}).get("early-data-header-name"))
@@ -745,6 +758,8 @@ def export_uri(proxy):
                 if aid:
                     raise ProtocolError("VMess AEAD sharing requires alterId=0")
                 params["encryption"] = proxy.get("cipher") or "auto"
+                if "udp" in proxy:
+                    params["udp"] = "1" if _bool(proxy["udp"]) else "0"
                 return _uri("vmess", proxy, quote(uuid, safe=""), params)
             network = str(proxy.get("network") or "tcp").lower()
             obj = {"v": "2", "ps": str(proxy.get("name") or "vmess"), "add": proxy["server"],

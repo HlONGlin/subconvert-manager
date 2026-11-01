@@ -1,5 +1,13 @@
 # 变更记录（Changelog）
 
+## v1.0.0 - 2026-11-01
+
+- [修复] AnyTLS 链接中的 `security=tls`、证书校验和客户端指纹正确转换到 Clash Play。
+- [修复] VMess 显式 `udp=false` 在分享链接转换中丢失的问题。
+- [修复] 拒绝不支持的 AnyTLS Reality 配置，避免生成不可用节点。
+- [优化] 更新已有部署时保留 `config.env` 中的有效端口，不再因旧服务占用端口而随机替换。
+- [新增] 版本标识与发布说明。
+
 ## 未发布
 
 - [新增] 14 种协议的分享链接双向转换：VMess、VLESS、Trojan、SS、SSR、SOCKS5、HTTP/HTTPS、Hysteria 1/2、TUIC、AnyTLS、Mieru、WireGuard、SSH
