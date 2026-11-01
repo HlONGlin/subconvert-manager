@@ -915,6 +915,12 @@ def split_v2ray_text(text: str) -> List[str]:
     text = text.strip().lstrip("\ufeff")
     if not text:
         return []
+    # Some panels/API clients persist multi-line input as escaped text rather
+    # than real line breaks. Normalize those separators before scanning URI
+    # boundaries; otherwise the next URI can become part of the previous
+    # node's fragment/name.
+    text = re.sub(r"(?i)<br\s*/?>", "\n", text)
+    text = text.replace("\\r\\n", "\n").replace("\\n", "\n").replace("\\r", "\n")
     if "://" not in text and re.fullmatch(r"[A-Za-z0-9+/=_\s-]+", text):
         try:
             decoded = _b64d(text)
