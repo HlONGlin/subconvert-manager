@@ -19,6 +19,7 @@ SERVICE_MGR="${SERVICE_MGR:-}"
 # Existing deployments keep their configured port during an update, even
 # while the old service is still running and temporarily holds that port.
 EXISTING_DEPLOYMENT=0
+EXISTING_PORT=""
 
 log() {
   printf '[%s] %s\n' "$(date '+%Y-%m-%d %H:%M:%S')" "$*"
@@ -152,6 +153,38 @@ install_system_packages() {
 ensure_env_file() {
   if [[ -f "$ENV_FILE" ]]; then
     EXISTING_DEPLOYMENT=1
+    EXISTING_PORT="$(get_env_key PORT)"
+    if [[ "$EXISTING_PORT" =~ ^[0-9]+$ ]] &&
+       (( EXISTING_PORT >= 1 && EXISTING_PORT <= 65535 )); then
+      return
+    fi
+  fi
+
+  if [[ "$EXISTING_DEPLOYMENT" == "0" ]]; then
+    for service_file in "$SERVICE_FILE_SYSTEMD" "$SERVICE_FILE_OPENRC" "$SERVICE_FILE_SYSV"; do
+      if [[ -f "$service_file" ]]; then
+        EXISTING_DEPLOYMENT=1
+        EXISTING_PORT="$(grep -oE -- '--port [0-9]+' "$service_file" | tail -n1 | awk '{print $2}' || true)"
+        if [[ "$EXISTING_PORT" =~ ^[0-9]+$ ]] &&
+           (( EXISTING_PORT >= 1 && EXISTING_PORT <= 65535 )); then
+          set_env_key "PORT" "$EXISTING_PORT"
+          return
+        fi
+      fi
+    done
+  fi
+
+  if [[ "$EXISTING_DEPLOYMENT" == "1" ]]; then
+    for service_file in "$SERVICE_FILE_SYSTEMD" "$SERVICE_FILE_OPENRC" "$SERVICE_FILE_SYSV"; do
+      if [[ -f "$service_file" ]]; then
+        EXISTING_PORT="$(grep -oE -- '--port [0-9]+' "$service_file" | tail -n1 | awk '{print $2}' || true)"
+        if [[ "$EXISTING_PORT" =~ ^[0-9]+$ ]] &&
+           (( EXISTING_PORT >= 1 && EXISTING_PORT <= 65535 )); then
+          set_env_key "PORT" "$EXISTING_PORT"
+          return
+        fi
+      fi
+    done
     return
   fi
 
@@ -170,6 +203,9 @@ LOGIN_MAX_FAILS=3
 LOGIN_LOCK_SECONDS=900
 UPDATE_BRANCH=main
 EOF
+    if [[ "$EXISTING_PORT" =~ ^[0-9]+$ ]] && (( EXISTING_PORT >= 1 && EXISTING_PORT <= 65535 )); then
+      set_env_key "PORT" "$EXISTING_PORT"
+    fi
     log "Created default config.env"
   fi
 }
@@ -199,6 +235,12 @@ apply_install_port_override() {
   fi
 
   if [[ "$override" == "auto" ]]; then
+    if [[ "$EXISTING_DEPLOYMENT" == "1" && "$EXISTING_PORT" =~ ^[0-9]+$ ]] &&
+       (( EXISTING_PORT >= 1 && EXISTING_PORT <= 65535 )); then
+      set_env_key "PORT" "$EXISTING_PORT"
+      log "Existing deployment detected; keeping configured PORT=$EXISTING_PORT."
+      return
+    fi
     set_env_key "PORT" "auto"
     log "PORT 设置为自动随机端口"
     return

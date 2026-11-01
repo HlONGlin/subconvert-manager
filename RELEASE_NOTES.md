@@ -1,3 +1,17 @@
+# v1.0.2
+
+## Highlights
+
+- Preserve the existing deployment port when an update passes `INSTALL_PORT_OVERRIDE=auto`.
+- Recover the previous port from an existing service definition when `config.env` is missing.
+
+## Verification
+
+- 63 unit tests pass.
+- Mihomo schema integration remains skipped unless `MIHOMO_BINARY` is configured.
+
+---
+
 # v1.0.1
 
 ## Highlights
