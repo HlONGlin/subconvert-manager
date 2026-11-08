@@ -54,6 +54,14 @@ DEFAULT_BASIC_USER = "admin"
 DEFAULT_BASIC_PASS = "change_me_please"
 
 
+def _app_version() -> str:
+    try:
+        with open(os.path.join(APP_DIR, "VERSION"), "r", encoding="utf-8") as version_file:
+            return version_file.read().strip() or "unknown"
+    except OSError:
+        return "unknown"
+
+
 def load_env() -> None:
     if not os.path.exists(CONFIG_ENV_FILE):
         return
@@ -276,7 +284,7 @@ async def suffix_path_middleware(request: Request, call_next):
 
 _FETCH_CACHE: Dict[str, Tuple[float, str]] = {}
 _FETCH_CACHE_LOCK = threading.Lock()
-_FETCH_CACHE_TTL = max(0.0, _safe_float(os.environ.get("FETCH_CACHE_TTL", "5"), 5.0))
+_FETCH_CACHE_TTL = max(0.0, _safe_float(os.environ.get("FETCH_CACHE_TTL", "300"), 300.0))
 _FETCH_CACHE_MAX = _clamp(_safe_int(os.environ.get("FETCH_CACHE_MAX", "256"), 256), 16, 4096)
 _SOURCE_STATUS_LOCK = threading.Lock()
 _SOURCE_STATUS_CACHE: Dict[str, Tuple[str, int, float]] = {}
@@ -685,7 +693,7 @@ def _checked_source_proxies(src: dict, issues: Optional[List[dict]] = None) -> L
         raise
 
 
-def _profile_response(profile: dict, fmt: str, issues: List[dict]) -> PlainTextResponse:
+def _profile_response(profile: dict, fmt: str, issues: List[dict], mode: str = "") -> PlainTextResponse:
     nodes = _profile_proxies(profile, issues)
     if not nodes:
         raise _conversion_failure(issues)
@@ -697,7 +705,7 @@ def _profile_response(profile: dict, fmt: str, issues: List[dict]) -> PlainTextR
         raw = "\n".join(uris) + "\n"
         body = uris_to_v2ray_subscription_base64(uris) if fmt == "v2ray" else raw
     elif fmt == "singbox":
-        return _singbox_response(nodes, issues)
+        return _singbox_response(nodes, issues, mode)
     else:
         template = profile.get("custom_template") or ""
         if template:
@@ -719,12 +727,12 @@ def _profile_response(profile: dict, fmt: str, issues: List[dict]) -> PlainTextR
     return response
 
 
-def _singbox_response(nodes: List[dict], issues: List[dict]) -> Response:
+def _singbox_response(nodes: List[dict], issues: List[dict], mode: str = "") -> Response:
     prepared = process_proxies(nodes, dedupe=False, sort="source")
     supported = [item for item in prepared if is_singbox_supported(item)]
     if not supported:
         raise HTTPException(status_code=422, detail="No nodes in this subscription are supported by the sing-box exporter")
-    body = json.dumps(build_singbox_config(supported), ensure_ascii=False, indent=2) + "\n"
+    body = json.dumps(build_singbox_config(supported, bare=mode == "bare"), ensure_ascii=False, indent=2) + "\n"
     response = Response(body, media_type="application/json")
     response.headers["Cache-Control"] = "no-store"
     response.headers["X-Node-Count"] = str(len(supported))
@@ -948,6 +956,95 @@ def rotate_security_suffix(_=Depends(require_admin_auth)):
     return RedirectResponse(url=_with_url_prefix("/?toast=安全后缀已更新，旧公共链接将失效"), status_code=303)
 
 
+@app.get("/admin/settings", response_class=HTMLResponse)
+def admin_settings(request: Request, _=Depends(require_admin_auth)):
+    return templates.TemplateResponse("settings.html", _template_context(request, settings={
+        "PORT": os.environ.get("PORT", ""), "TIMEOUT": TIMEOUT, "DATA_FILE": DATA_FILE,
+        "SUB_TOKEN": SUB_TOKEN, "URL_SUFFIX": URL_SUFFIX, "LOGIN_MAX_FAILS": LOGIN_MAX_FAILS,
+        "LOGIN_LOCK_SECONDS": LOGIN_LOCK_SECONDS, "MAX_REMOTE_BYTES": MAX_REMOTE_BYTES,
+        "FETCH_CACHE_TTL": int(_FETCH_CACHE_TTL), "UPDATE_BRANCH": UPDATE_BRANCH,
+        "BASIC_AUTH_USER": BASIC_USER,
+    }))
+
+
+@app.post("/admin/settings")
+def save_admin_settings(
+    port: str = Form(""), timeout: str = Form("15"), data_file: str = Form("data/sources.json"),
+    sub_token: str = Form(""), url_suffix: str = Form(""), login_max_fails: str = Form("3"),
+    login_lock_seconds: str = Form("900"), max_remote_bytes: str = Form("2097152"),
+    fetch_cache_ttl: str = Form("300"), update_branch: str = Form("main"),
+    username: str = Form(""), password: str = Form(""), confirm_password: str = Form(""),
+    _=Depends(require_admin_auth),
+):
+    global TIMEOUT, DATA_FILE, SUB_TOKEN, URL_SUFFIX, LOGIN_MAX_FAILS, LOGIN_LOCK_SECONDS
+    global MAX_REMOTE_BYTES, UPDATE_BRANCH, _FETCH_CACHE_TTL
+    port = port.strip()
+    timeout_value, fails_value = _safe_int(timeout, -1), _safe_int(login_max_fails, -1)
+    lock_value, bytes_value = _safe_int(login_lock_seconds, -1), _safe_int(max_remote_bytes, -1)
+    cache_value = _safe_int(fetch_cache_ttl, -1)
+    if (port and not (port.isdigit() and 1 <= int(port) <= 65535)) or not 1 <= timeout_value <= 20:
+        raise HTTPException(status_code=400, detail="Invalid port or timeout")
+    if not 1 <= fails_value <= 10 or not 60 <= lock_value <= 86400:
+        raise HTTPException(status_code=400, detail="Invalid login lock settings")
+    if not 262144 <= bytes_value <= 10 * 1024 * 1024 or not 0 <= cache_value <= 86400:
+        raise HTTPException(status_code=400, detail="Invalid size limit or cache TTL")
+    if not data_file.strip():
+        raise HTTPException(status_code=400, detail="DATA_FILE is required")
+    username = username.strip()
+    if password or confirm_password or username != BASIC_USER:
+        error = _validate_setup_credentials(username, password, confirm_password)
+        if error:
+            raise HTTPException(status_code=400, detail=error)
+    values = {
+        "PORT": port, "TIMEOUT": str(timeout_value), "DATA_FILE": data_file.strip(),
+        "SUB_TOKEN": sub_token.strip(), "URL_SUFFIX": url_suffix.strip().strip("/"),
+        "LOGIN_MAX_FAILS": str(fails_value), "LOGIN_LOCK_SECONDS": str(lock_value),
+        "MAX_REMOTE_BYTES": str(bytes_value), "FETCH_CACHE_TTL": str(cache_value),
+        "UPDATE_BRANCH": update_branch.strip() or "main",
+    }
+    if password:
+        values.update({"BASIC_AUTH_USER": username, "BASIC_AUTH_PASS": password})
+    _save_env_values(values)
+    for key, value in values.items():
+        os.environ[key] = value
+    TIMEOUT, DATA_FILE, SUB_TOKEN = timeout_value, data_file.strip(), sub_token.strip()
+    URL_SUFFIX = values["URL_SUFFIX"]
+    LOGIN_MAX_FAILS, LOGIN_LOCK_SECONDS = fails_value, lock_value
+    MAX_REMOTE_BYTES, UPDATE_BRANCH, _FETCH_CACHE_TTL = bytes_value, values["UPDATE_BRANCH"], float(cache_value)
+    if password:
+        _set_admin_credentials(username, password)
+    with _FETCH_CACHE_LOCK:
+        _FETCH_CACHE.clear()
+    return RedirectResponse(url=_with_url_prefix("/admin/settings?toast=settings-saved"), status_code=303)
+
+
+@app.post("/admin/settings/token/rotate")
+def rotate_subscription_token(_=Depends(require_admin_auth)):
+    global SUB_TOKEN
+    SUB_TOKEN = secrets.token_urlsafe(32)
+    os.environ["SUB_TOKEN"] = SUB_TOKEN
+    _save_env_values({"SUB_TOKEN": SUB_TOKEN})
+    return RedirectResponse(url=_with_url_prefix("/admin/settings?toast=token-rotated"), status_code=303)
+
+
+@app.get("/admin/settings/backup")
+def export_backup(_=Depends(require_admin_auth)):
+    return Response(json.dumps(_load_db(), ensure_ascii=False, indent=2) + "\n", media_type="application/json",
+                    headers={"Content-Disposition": "attachment; filename=sources.json"})
+
+
+@app.post("/admin/settings/backup")
+async def import_backup(file: UploadFile = File(...), _=Depends(require_admin_auth)):
+    try:
+        data = json.loads((await file.read()).decode("utf-8-sig"))
+    except (UnicodeDecodeError, json.JSONDecodeError):
+        raise HTTPException(status_code=400, detail="Backup must be valid UTF-8 JSON")
+    if not isinstance(data, dict) or not isinstance(data.get("sources", []), list) or not isinstance(data.get("profiles", []), list):
+        raise HTTPException(status_code=400, detail="Backup must contain sources/profiles arrays")
+    _save_db({"sources": data.get("sources", []), "profiles": data.get("profiles", [])})
+    return RedirectResponse(url=_with_url_prefix("/admin/settings?toast=backup-imported"), status_code=303)
+
+
 @app.get("/", response_class=HTMLResponse)
 def home(request: Request, _=Depends(require_admin_auth)):
     db = _load_db()
@@ -964,6 +1061,11 @@ def home(request: Request, _=Depends(require_admin_auth)):
             url_suffix=URL_SUFFIX,
             suffix_enabled=bool(URL_SUFFIX),
             token_enabled=bool(SUB_TOKEN),
+            source_count=len(sources),
+            failed_source_count=sum(1 for source in sources if source.get("last_status") == "failed"),
+            profile_count=len(profiles),
+            node_count=sum(_safe_int(source.get("last_node_count"), 0) for source in sources),
+            version=_app_version(),
         ),
     )
 
@@ -983,6 +1085,41 @@ def profile_edit(request: Request, pid: str, _=Depends(require_admin_auth)):
         "profile_edit.html",
         _template_context(request, profile=profile, sources=list_sources(_load_db()), error=None),
     )
+
+
+@app.post("/profiles/preview")
+def profile_preview(
+    source_ids: List[str] = Form([]), filter_include: str = Form(""), filter_exclude: str = Form(""),
+    filter_mode: str = Form("keyword"), rename_regex: str = Form(""), rename_with: str = Form(""),
+    dedupe: str = Form(""), sort: str = Form("name"), _=Depends(require_admin_auth),
+):
+    db = _load_db()
+    sources = {str(source.get("id") or ""): source for source in list_sources(db)}
+    requested = _parse_source_ids(source_ids)
+    if not requested or any(sid not in sources for sid in requested):
+        raise HTTPException(status_code=400, detail="Select existing subscription sources")
+    _validate_profile_form("preview", requested, filter_mode, filter_include, filter_exclude,
+                           rename_regex, rename_with, "0")
+    nodes, skipped = [], []
+    for sid in requested:
+        try:
+            local_issues = []
+            parsed = _source_proxies(sources[sid], local_issues)
+            nodes.extend(parsed)
+            if local_issues:
+                skipped.extend(issue.get("reason", "部分节点无法解析") for issue in local_issues)
+        except HTTPException:
+            skipped.append(str(sources[sid].get("name") or sid) + "：获取或解析失败")
+    all_nodes = process_proxies(nodes, dedupe=False, sort="source")
+    candidates = process_proxies(nodes, filter_include=filter_include, filter_exclude=filter_exclude,
+                                 filter_mode=filter_mode, dedupe=False, sort="source")
+    retained_names = {str(item.get("name") or "") for item in candidates}
+    skipped.extend(str(item.get("name") or "proxy") for item in all_nodes
+                   if str(item.get("name") or "") not in retained_names)
+    filtered = process_proxies(nodes, filter_include=filter_include, filter_exclude=filter_exclude,
+        filter_mode=filter_mode, rename_regex=rename_regex, rename_with=rename_with,
+        dedupe=bool(dedupe), sort=sort)
+    return JSONResponse({"count": len(filtered), "names": [item.get("name") for item in filtered], "skipped": skipped})
 
 
 @app.post("/profiles/save")
@@ -1344,10 +1481,10 @@ def sub_clash(sid: str, template: str = "", _=Depends(require_admin_auth)):
 
 
 @app.get("/s/{sid}/singbox")
-def sub_singbox(sid: str, _=Depends(require_admin_auth)):
+def sub_singbox(sid: str, mode: str = "", _=Depends(require_admin_auth)):
     issues: List[dict] = []
     nodes = _checked_source_proxies(_source_or_404(sid), issues)
-    return _singbox_response(nodes, issues)
+    return _singbox_response(nodes, issues, mode)
 
 
 @app.get("/pub/s/{sid}/v2ray", response_class=PlainTextResponse)
@@ -1389,11 +1526,11 @@ def pub_clash(sid: str, token: str = "", template: str = ""):
 
 
 @app.get("/pub/s/{sid}/singbox")
-def pub_singbox(sid: str, token: str = ""):
+def pub_singbox(sid: str, token: str = "", mode: str = ""):
     require_sub_token(token)
     issues: List[dict] = []
     nodes = _checked_source_proxies(_source_or_404(sid), issues)
-    return _singbox_response(nodes, issues)
+    return _singbox_response(nodes, issues, mode)
 
 
 @app.get("/p/{pid}/clash", response_class=PlainTextResponse)
@@ -1412,13 +1549,13 @@ def profile_v2ray_raw(pid: str, _=Depends(require_admin_auth)):
 
 
 @app.get("/p/{pid}/singbox", response_class=PlainTextResponse)
-def profile_singbox(pid: str, _=Depends(require_admin_auth)):
-    return _profile_response(_profile_or_404(pid), "singbox", [])
+def profile_singbox(pid: str, mode: str = "", _=Depends(require_admin_auth)):
+    return _profile_response(_profile_or_404(pid), "singbox", [], mode)
 
 
 @app.get("/pub/p/{pid}/{fmt}", response_class=PlainTextResponse)
-def pub_profile(pid: str, fmt: str, token: str = ""):
+def pub_profile(pid: str, fmt: str, token: str = "", mode: str = ""):
     require_sub_token(token)
     if fmt not in ("clash", "v2ray", "v2ray_raw", "singbox"):
         raise HTTPException(status_code=404, detail="Unsupported profile output")
-    return _profile_response(_profile_or_404(pid), fmt, [])
+    return _profile_response(_profile_or_404(pid), fmt, [], mode)

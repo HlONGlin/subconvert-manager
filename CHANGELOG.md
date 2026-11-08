@@ -1,5 +1,14 @@
 # 变更记录（Changelog）
 
+## v1.1.1 - 2026-11-08
+
+- [修复] sing-box Reality 自动启用 uTLS，优先使用节点 `client-fingerprint`，缺省为 Chrome。
+- [修复] WireGuard 迁移为 sing-box endpoint 格式。
+- [新增] sing-box 完整配置、mixed 入站、DNS、selector/urltest 分组及 `mode=bare` 输出。
+- [新增] sing-box 1.12.3 golden 集成校验，覆盖 Reality、VMess+WS+TLS、Trojan、SS2022、Hysteria2、TUIC 和 WireGuard。
+- [新增] `/admin/settings`、订阅源备份导入导出、首页总览、组合订阅预览和直接复制 Clash。
+- [优化] 订阅缓存 TTL 默认值调整为 300 秒。
+
 ## v1.1.0 - 2026-11-08
 
 - [新增] 组合订阅可合并多个来源，支持关键词/正则筛选、重命名、去重、排序及自定义 Clash YAML 模板。

@@ -107,9 +107,11 @@
           <label><input type="checkbox" name="dedupe" value="1" {% if not profile or profile.dedupe %}checked{% endif %}/> 合并重复节点（按连接参数判断）</label>
         </div>
         <div class="actions" style="margin-top:12px;">
+          <button class="btn" type="button" data-profile-preview>预览</button>
           <button class="btn primary" type="submit">保存组合订阅</button>
           <a class="btn ghost" href="{{ url_prefix }}/">取消</a>
         </div>
+        <div class="state-block" data-preview-result hidden style="margin-top:12px;" aria-live="polite"></div>
       </form>
     </div>
   </div>
@@ -122,6 +124,29 @@
       function update() { field.hidden = mode.value !== "custom"; }
       mode.addEventListener("change", update);
       update();
+      var previewButton = document.querySelector("[data-profile-preview]");
+      var result = document.querySelector("[data-preview-result]");
+      previewButton.addEventListener("click", async function () {
+        result.hidden = false;
+        result.textContent = "正在预览…";
+        try {
+          var response = await fetch("{{ url_prefix }}/profiles/preview", { method: "POST", body: new FormData(previewButton.form) });
+          var data = await response.json();
+          if (!response.ok) throw new Error(data.detail || "预览失败");
+          result.replaceChildren();
+          var summary = document.createElement("strong");
+          summary.textContent = "过滤后 " + data.count + " 个节点";
+          result.appendChild(summary);
+          var names = document.createElement("div");
+          names.textContent = "重命名结果：" + (data.names.length ? data.names.join("、") : "无");
+          result.appendChild(names);
+          if (data.skipped.length) {
+            var skipped = document.createElement("div");
+            skipped.textContent = "跳过：" + data.skipped.join("；");
+            result.appendChild(skipped);
+          }
+        } catch (error) { result.textContent = error.message; }
+      });
     })();
   </script>
 </body>

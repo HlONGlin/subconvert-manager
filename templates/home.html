@@ -15,6 +15,7 @@
       </div>
       <div class="top-actions">
         <a class="btn primary" href="{{ url_prefix }}/convert" aria-label="在线转换">在线转换</a>
+        <a class="btn" href="{{ url_prefix }}/admin/settings">设置</a>
         <details class="add-subscription-menu">
           <summary class="btn primary" aria-label="新增订阅">新增订阅</summary>
           <div class="add-menu-panel">
@@ -27,6 +28,13 @@
         </button>
         <a class="btn danger" href="{{ url_prefix }}/logout" aria-label="退出登录">退出登录</a>
       </div>
+    </div>
+
+    <div class="quick-grid" aria-label="订阅总览">
+      <div class="card"><div class="hint">订阅源 / 失败</div><strong>{{ source_count }} / {{ failed_source_count }}</strong></div>
+      <div class="card"><div class="hint">组合订阅</div><strong>{{ profile_count }}</strong></div>
+      <div class="card"><div class="hint">节点总数</div><strong>{{ node_count }}</strong></div>
+      <div class="card"><div class="hint">版本</div><strong>v{{ version }}</strong></div>
     </div>
 
     <div class="home-section-tabs" role="tablist" aria-label="订阅管理区域">
@@ -54,8 +62,9 @@
               <td data-label="来源">{{ p.source_ids|length }} 个</td>
               <td data-label="更新时间"><span class="mono">{{ p.updated_at|fmt_ts }}</span></td>
               <td data-label="订阅链接">
+                <button class="btn primary" type="button" data-copy-text="{{ profile_base }}/clash{{ token_query }}">复制 Clash</button>
                 <details class="inline-details">
-                  <summary>查看链接</summary>
+                  <summary>其他链接</summary>
                   <div class="link-stack mono">
                     {% for label, fmt in [('Clash YAML', 'clash'), ('V2Ray Base64', 'v2ray'), ('V2Ray Raw', 'v2ray_raw'), ('sing-box JSON', 'singbox')] %}
                     <div class="link-row"><strong>{{ label }}</strong><button class="btn ghost" type="button" data-copy-text="{{ profile_base }}/{{ fmt }}{{ token_query }}" aria-label="复制 {{ label }} 订阅链接">复制</button></div>
@@ -219,8 +228,9 @@
                 {% if s.last_checked_at %}<div class="hint">{{ s.last_checked_at|fmt_ts }}</div>{% endif %}
               </td>
               <td data-label="订阅">
+                <button class="btn primary" type="button" data-copy-text="{{ u_clash_play }}">复制 Clash</button>
                 <details class="inline-details">
-                  <summary>查看链接</summary>
+                  <summary>其他链接</summary>
                   <div class="link-stack mono">
                     <div class="link-row">
                       <strong>V2Ray b64</strong>

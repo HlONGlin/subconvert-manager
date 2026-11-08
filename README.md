@@ -33,7 +33,7 @@
 | 🔄 在线格式转换 | Clash → V2Ray（Base64 / Raw）、V2Ray → Clash（play 模板）|
 | 📤 多客户端输出 | 组合订阅可输出 Clash、V2Ray 与 sing-box JSON；不支持的 sing-box 节点会通过响应头计数 |
 | 🩺 来源检查 | 可手动检查订阅源；客户端拉取时同步更新最近检查状态与节点数 |
-| 🔗 私有订阅接口 | `/s/{sid}/v2ray`、`/s/{sid}/clash` 需登录访问 |
+| 🔗 私有订阅接口 | `/s/{sid}/v2ray`、`/s/{sid}/clash`、`/s/{sid}/singbox` 需登录访问 |
 | 🌐 公共订阅接口 | `/pub/s/{sid}/...?token=...` 供客户端直接使用 |
 | 🛡️ 安全路径隔离 | `URL_SUFFIX` 为所有路由加路径前缀，防止扫描 |
 | 🚦 登录保护 | 连续失败锁定，支持 Basic Auth + Session 双模式 |
@@ -50,6 +50,8 @@
 | V2Ray Base64 | `/pub/p/{id}/v2ray` |
 | V2Ray Raw | `/pub/p/{id}/v2ray_raw` |
 | sing-box JSON | `/pub/p/{id}/singbox` |
+
+单个订阅源也支持 `/pub/s/{id}/singbox?token=...`（私有管理接口为 `/s/{id}/singbox`）。sing-box 接口默认返回完整配置，追加 `?mode=bare`（已有查询参数时使用 `&mode=bare`）只返回 outbounds 数组；完整配置包含 mixed 入站、DNS、`proxy`/`auto` 分组。WireGuard 使用 endpoint 格式，Reality TLS 自动启用 uTLS 并采用节点指纹或 Chrome。
 
 sing-box 当前转换 Shadowsocks（无插件）、VMess、VLESS、Trojan、Hysteria2、TUIC、AnyTLS、SOCKS5、HTTP 与单 peer WireGuard。其他协议或无法映射的节点会跳过，响应头 `X-Output-Skipped` 返回数量；若没有可输出节点则返回 HTTP 422。Clash 原生 YAML 仍保留原样分发。
 
@@ -287,20 +289,12 @@ sudo bash install.sh
 
 ## 变更记录
 
-### 未发布
+### v1.1.1 - 2026-11-08
 
-- **新增** ClashPlay 风格"部署型"Clash 输出模板（`template=play`）
-- **新增** 订阅源维度的默认模板与限速字段：`clash_template` / `rate_limit_mbps`
-- **新增** 全局异常处理与统一中文错误页
-- **新增** 拉取内容大小限制（默认 2 MB，可通过 `MAX_REMOTE_BYTES` 配置）
-- **增强** UI 统一视觉规范：卡片、表格、按钮、空态、复制、Toast
-- **增强** 互转页新增模板选择与限速参数
-- **增强** 首页安全提醒（默认口令 / Token 缺失高亮提示）
-- **工程化** 增加基础单元测试，补齐文档说明
-- **安全** 修复 `SESSION_SECRET` 弱默认值，改为运行时随机生成
-- **修复** `control.sh` 中 `project_status_text` 的 `$?` 状态捕获逻辑
-- **修复** `is_port_available` 中 heredoc 变量插值风险
-- **修复** `set_env_key` 中 `sed` 替换值特殊字符转义
+- 修复 sing-box Reality uTLS 指纹和 WireGuard endpoint 输出，并增加 sing-box 1.12.3 集成校验。
+- 增加 mixed 入站、DNS、自动测速/选择分组和 `mode=bare` 输出。
+- 增加 `/admin/settings`、数据备份导入导出、首页总览、组合订阅预览和直接复制 Clash。
+- 默认订阅缓存 TTL 调整为 300 秒。
 
 ### 2026-02-17
 

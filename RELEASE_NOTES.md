@@ -1,3 +1,19 @@
+# v1.1.1
+
+## Highlights
+
+- Fix Reality uTLS fingerprints and migrate WireGuard to sing-box endpoints.
+- Add complete sing-box configs with mixed inbound, DNS, selector/urltest groups, and bare outbound mode.
+- Add an admin settings page, subscription backup import/export, dashboard summaries, and profile preview.
+- Set subscription fetch cache TTL to 300 seconds by default.
+
+## Verification
+
+- 82 tests pass; one Mihomo integration test is skipped unless `MIHOMO_BINARY` is configured.
+- sing-box 1.12.3 checks pass for Reality, VMess+WS+TLS, Trojan, SS2022, Hysteria2, TUIC, and WireGuard endpoint.
+
+---
+
 # v1.1.0
 
 ## Highlights

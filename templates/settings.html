@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <title>设置 - SubConvert Manager</title>
+  <link rel="stylesheet" href="{{ url_prefix }}/static/style.css"/>
+</head>
+<body>
+  <div class="wrap">
+    <div class="top">
+      <div class="brand"><h1>设置</h1><div class="sub">服务参数、安全凭据与备份</div></div>
+      <div class="top-actions"><a class="btn" href="{{ url_prefix }}/">返回管理</a></div>
+    </div>
+    <form id="settings-form" class="card" action="{{ url_prefix }}/admin/settings" method="post" data-lock-submit>
+      <h3>订阅拉取</h3>
+      <div class="quick-grid">
+        <div class="row"><label for="timeout">超时（秒）</label><input id="timeout" name="timeout" type="number" min="1" max="20" value="{{ settings.TIMEOUT }}" required/></div>
+        <div class="row"><label for="max-remote-bytes">最大体积（字节）</label><input id="max-remote-bytes" name="max_remote_bytes" type="number" min="262144" max="10485760" value="{{ settings.MAX_REMOTE_BYTES }}" required/></div>
+        <div class="row"><label for="fetch-cache-ttl">缓存 TTL（秒，0 为关闭）</label><input id="fetch-cache-ttl" name="fetch_cache_ttl" type="number" min="0" max="86400" value="{{ settings.FETCH_CACHE_TTL }}" required/></div>
+        <div class="row"><label for="data-file">数据文件</label><input id="data-file" name="data_file" value="{{ settings.DATA_FILE }}" required/></div>
+      </div>
+      <h3>安全</h3>
+      <div class="quick-grid">
+        <div class="row"><label for="admin-user">管理员账号</label><input id="admin-user" name="username" value="{{ settings.BASIC_AUTH_USER }}" autocomplete="username" required/></div>
+        <div class="row"><label for="admin-pass">新密码（留空不修改）</label><input id="admin-pass" name="password" type="password" minlength="8" maxlength="128" autocomplete="new-password"/></div>
+        <div class="row"><label for="admin-pass2">确认新密码</label><input id="admin-pass2" name="confirm_password" type="password" minlength="8" maxlength="128" autocomplete="new-password"/></div>
+        <div class="row"><label for="sub-token">SUB_TOKEN</label><input id="sub-token" name="sub_token" value="{{ settings.SUB_TOKEN }}" autocomplete="off"/></div>
+        <div class="row"><label for="url-suffix">URL_SUFFIX</label><input id="url-suffix" name="url_suffix" value="{{ settings.URL_SUFFIX }}" maxlength="5"/></div>
+        <div class="row"><label for="login-fails">登录失败上限</label><input id="login-fails" name="login_max_fails" type="number" min="1" max="10" value="{{ settings.LOGIN_MAX_FAILS }}" required/></div>
+        <div class="row"><label for="login-lock">登录锁定时长（秒）</label><input id="login-lock" name="login_lock_seconds" type="number" min="60" max="86400" value="{{ settings.LOGIN_LOCK_SECONDS }}" required/></div>
+      </div>
+      <div class="actions"><button class="btn primary" type="submit">保存设置</button></div>
+    </form>
+
+    <section class="card">
+      <h3>更新与备份</h3>
+      <div class="quick-grid">
+        <div class="row"><label for="update-branch">更新分支</label><input id="update-branch" form="settings-form" name="update_branch" value="{{ settings.UPDATE_BRANCH }}" required/></div>
+        <form class="row" action="{{ url_prefix }}/admin/update_from_github" method="post"><label>检查并更新</label><button class="btn" type="submit">从 GitHub 更新</button></form>
+        <div class="row"><label>导出备份</label><a class="btn" href="{{ url_prefix }}/admin/settings/backup">下载 sources.json</a></div>
+        <form class="row" action="{{ url_prefix }}/admin/settings/backup" method="post" enctype="multipart/form-data"><label for="backup-file">导入备份</label><input id="backup-file" type="file" name="file" accept="application/json,.json" required/><button class="btn" type="submit">导入 JSON</button></form>
+      </div>
+      <div class="actions" style="margin-top:12px;">
+        <form action="{{ url_prefix }}/security/suffix/rotate" method="post"><button class="btn" type="submit">轮换 URL_SUFFIX</button></form>
+        <form action="{{ url_prefix }}/admin/settings/token/rotate" method="post"><button class="btn" type="submit">重新生成 SUB_TOKEN</button></form>
+      </div>
+      <div class="row" style="margin-top:12px;"><label for="port">服务端口（保存后需重启服务）</label><input id="port" form="settings-form" name="port" type="number" min="1" max="65535" value="{{ settings.PORT }}"/></div>
+      <div class="actions"><button class="btn" type="submit" form="settings-form">保存设置</button></div>
+    </section>
+
+    <section class="card">
+      <h3>外观</h3>
+      <div class="quick-grid">
+        <div class="row"><label for="default-density">默认密度</label><select id="default-density"><option value="cozy">舒适</option><option value="compact">紧凑</option></select></div>
+        <div class="row"><label for="default-tab">首页默认区域</label><select id="default-tab"><option value="sources">订阅源</option><option value="profiles">组合订阅</option></select></div>
+      </div>
+      <div class="hint">偏好保存在当前浏览器</div>
+    </section>
+  </div>
+  <script src="{{ url_prefix }}/static/app.js"></script>
+  <script>
+    (function () {
+      var density = document.getElementById("default-density");
+      var tab = document.getElementById("default-tab");
+      try {
+        density.value = localStorage.getItem("scm_density_mode") || "cozy";
+        tab.value = localStorage.getItem("scm_home_section") || "sources";
+      } catch (e) {}
+      density.addEventListener("change", function () { try { localStorage.setItem("scm_density_mode", density.value); } catch (e) {} });
+      tab.addEventListener("change", function () { try { localStorage.setItem("scm_home_section", tab.value); } catch (e) {} });
+    })();
+  </script>
+</body>
+</html>

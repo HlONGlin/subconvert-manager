@@ -6,8 +6,9 @@ SINGBOX_SUPPORTED_TYPES = {
 }
 
 
-def build_singbox_config(proxies: List[Dict]) -> Dict:
+def build_singbox_config(proxies: List[Dict], bare: bool = False) -> Dict:
     outbounds = []
+    endpoints = []
     tags = []
     for source in proxies or []:
         item = dict(source)
@@ -38,16 +39,30 @@ def build_singbox_config(proxies: List[Dict]) -> Dict:
                 outbound["password"] = item["password"]
             _add_tls(outbound, item)
         elif kind == "wireguard":
-            outbound = {
-                **base, "type": "wireguard",
-                "private_key": item.get("private-key"),
-                "peer_public_key": item.get("public-key"),
-                "local_address": [value for value in (item.get("ip"), item.get("ipv6")) if value],
+            peer = {
+                "address": item.get("server"),
+                "port": item.get("port"),
+                "public_key": item.get("public-key"),
+                "allowed_ips": ["0.0.0.0/0", "::/0"],
             }
             if item.get("pre-shared-key"):
-                outbound["pre_shared_key"] = item["pre-shared-key"]
+                peer["pre_shared_key"] = item["pre-shared-key"]
+            if item.get("reserved"):
+                peer["reserved"] = item["reserved"]
+            if item.get("persistent-keepalive"):
+                peer["persistent_keepalive_interval"] = item["persistent-keepalive"]
+            endpoint = {
+                "type": "wireguard",
+                "tag": name,
+                "address": [value for value in (item.get("ip"), item.get("ipv6")) if value],
+                "private_key": item.get("private-key"),
+                "peers": [peer],
+            }
             if item.get("mtu"):
-                outbound["mtu"] = item["mtu"]
+                endpoint["mtu"] = item["mtu"]
+            endpoints.append(endpoint)
+            tags.append(name)
+            continue
         elif kind in ("vmess", "vless", "trojan"):
             outbound = {**base, "type": kind}
             if kind == "vmess":
@@ -102,12 +117,34 @@ def build_singbox_config(proxies: List[Dict]) -> Dict:
         outbounds.append(outbound)
         tags.append(name)
 
-    selector = {"type": "selector", "tag": "proxy", "outbounds": ["direct"] + tags}
-    return {
-        "log": {"level": "info"},
-        "outbounds": [{"type": "direct", "tag": "direct"}, selector] + outbounds,
-        "route": {"final": "proxy"},
+    nodes = [{"type": "direct", "tag": "direct"}] + outbounds
+    selector = {"type": "selector", "tag": "proxy", "outbounds": ["auto", "direct"] + tags, "default": "auto"}
+    urltest = {
+        "type": "urltest",
+        "tag": "auto",
+        "outbounds": tags,
+        "url": "http://www.gstatic.com/generate_204",
+        "interval": "3m",
     }
+    nodes = [nodes[0], selector, urltest] + nodes[1:]
+    if bare:
+        return nodes
+    config = {
+        "log": {"level": "info"},
+        "inbounds": [{"type": "mixed", "tag": "mixed-in", "listen": "127.0.0.1", "listen_port": 1080}],
+        "dns": {
+            "servers": [
+                {"type": "udp", "tag": "google", "server": "8.8.8.8"},
+                {"type": "udp", "tag": "cloudflare", "server": "1.1.1.1"},
+            ],
+            "final": "google",
+        },
+        "outbounds": nodes,
+        "route": {"default_domain_resolver": "google", "final": "proxy"},
+    }
+    if endpoints:
+        config["endpoints"] = endpoints
+    return config
 
 
 def _add_tls(outbound: Dict, proxy: Dict, required: bool = False) -> None:
@@ -122,9 +159,14 @@ def _add_tls(outbound: Dict, proxy: Dict, required: bool = False) -> None:
         value = proxy.get("skip-cert-verify")
         tls["insecure"] = value.strip().lower() in ("1", "true", "yes", "on") if isinstance(value, str) else bool(value)
     if isinstance(reality, dict):
+        fingerprint = proxy.get("client-fingerprint") or "chrome"
+        tls["utls"] = {"enabled": True, "fingerprint": fingerprint}
+        public_key = reality.get("public-key") or reality.get("public_key")
+        if public_key:
+            public_key = str(public_key).replace("+", "-").replace("/", "_").rstrip("=")
         tls["reality"] = {
             "enabled": True,
-            "public_key": reality.get("public-key") or reality.get("public_key"),
+            "public_key": public_key,
             "short_id": reality.get("short-id") or reality.get("short_id") or "",
         }
     outbound["tls"] = tls

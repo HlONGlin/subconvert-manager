@@ -51,10 +51,40 @@ class TestProfileExports(unittest.TestCase):
             "network": "ws",
             "ws-opts": {"path": "/tunnel", "headers": {"Host": "cdn.example"}},
         }])
-        outbound = config["outbounds"][2]
+        outbound = next(item for item in config["outbounds"] if item["tag"] == "Reality")
         self.assertEqual(outbound["type"], "vless")
+        self.assertEqual(outbound["tls"]["utls"], {"enabled": True, "fingerprint": "chrome"})
         self.assertEqual(outbound["tls"]["reality"]["public_key"], "key")
         self.assertEqual(outbound["transport"]["path"], "/tunnel")
+
+    def test_singbox_export_maps_wireguard_to_endpoint(self):
+        config = build_singbox_config([{
+            "name": "WireGuard",
+            "type": "wireguard",
+            "server": "vpn.example",
+            "port": 51820,
+            "private-key": "private",
+            "public-key": "public",
+            "pre-shared-key": "psk",
+            "ip": "10.0.0.2/32",
+            "ipv6": "fd00::2/128",
+            "reserved": [1, 2, 3],
+            "mtu": 1280,
+        }])
+        endpoint = config["endpoints"][0]
+        self.assertEqual(endpoint["type"], "wireguard")
+        self.assertEqual(endpoint["tag"], "WireGuard")
+        self.assertEqual(endpoint["address"], ["10.0.0.2/32", "fd00::2/128"])
+        self.assertEqual(endpoint["private_key"], "private")
+        self.assertEqual(endpoint["mtu"], 1280)
+        self.assertEqual(endpoint["peers"][0], {
+            "address": "vpn.example",
+            "port": 51820,
+            "public_key": "public",
+            "allowed_ips": ["0.0.0.0/0", "::/0"],
+            "pre_shared_key": "psk",
+            "reserved": [1, 2, 3],
+        })
 
     def test_custom_clash_template_keeps_rules_and_dns(self):
         doc = build_custom_clash_template(
@@ -110,7 +140,7 @@ class TestProfileRoutes(unittest.TestCase):
         self.assertEqual(singbox.headers["content-type"], "application/json")
         config = json.loads(singbox.text)
         self.assertEqual(singbox.headers["X-Node-Count"], "2")
-        self.assertEqual(len(config["outbounds"]) - 2, 2)
+        self.assertEqual(sum(item["type"] == "shadowsocks" for item in config["outbounds"]), 2)
 
         public = self.client.get("/pub/p/daily/v2ray?token=profile-test-token")
         self.assertEqual(public.status_code, 200, public.text)
@@ -145,7 +175,62 @@ class TestProfileRoutes(unittest.TestCase):
         response = self.client.get("/pub/s/mixed-yaml/singbox?token=profile-test-token")
         self.assertEqual(response.status_code, 200, response.text)
         self.assertEqual(response.headers["X-Output-Skipped"], "1")
-        self.assertEqual(json.loads(response.text)["outbounds"][2]["tag"], "Known")
+        self.assertIn("Known", [item["tag"] for item in json.loads(response.text)["outbounds"]])
+
+    def test_singbox_bare_mode_returns_only_outbounds(self):
+        response = self.client.get("/pub/s/source-one/singbox?token=profile-test-token&mode=bare")
+        self.assertEqual(response.status_code, 200, response.text)
+        self.assertIsInstance(response.json(), list)
+
+    def test_profile_preview_shows_renamed_nodes_and_skips_filtered_nodes(self):
+        response = self.client.post("/profiles/preview", data={
+            "source_ids": ["source-one", "source-two"], "filter_include": "HK",
+            "filter_mode": "keyword", "rename_regex": "HK-", "rename_with": "Home-", "dedupe": "1",
+        })
+        self.assertEqual(response.status_code, 200, response.text)
+        self.assertEqual(response.json()["count"], 1)
+        self.assertEqual(response.json()["names"], ["Home-1"])
+        self.assertIn("JP-1", response.json()["skipped"])
+
+    def test_settings_page_and_backup_import_export(self):
+        self.assertEqual(self.client.get("/admin/settings").status_code, 200)
+        backup = self.client.get("/admin/settings/backup")
+        self.assertEqual(backup.status_code, 200)
+        self.assertEqual(len(backup.json()["sources"]), 2)
+        imported = self.client.post("/admin/settings/backup", files={
+            "file": ("sources.json", json.dumps({"sources": [], "profiles": []}), "application/json"),
+        }, follow_redirects=False)
+        self.assertEqual(imported.status_code, 303)
+        self.assertEqual(appmod._load_db()["sources"], [])
+
+    def test_settings_save_updates_runtime_values_and_persists_env(self):
+        names = ("CONFIG_ENV_FILE", "TIMEOUT", "DATA_FILE", "SUB_TOKEN", "URL_SUFFIX",
+                 "LOGIN_MAX_FAILS", "LOGIN_LOCK_SECONDS", "MAX_REMOTE_BYTES", "UPDATE_BRANCH", "_FETCH_CACHE_TTL")
+        previous = {name: getattr(appmod, name) for name in names}
+        env_names = ("PORT", "TIMEOUT", "DATA_FILE", "SUB_TOKEN", "URL_SUFFIX", "LOGIN_MAX_FAILS",
+                     "LOGIN_LOCK_SECONDS", "MAX_REMOTE_BYTES", "FETCH_CACHE_TTL", "UPDATE_BRANCH")
+        old_env = {name: os.environ.get(name) for name in env_names}
+        appmod.CONFIG_ENV_FILE = os.path.join(self.temp_dir.name, "settings.env")
+        try:
+            response = self.client.post("/admin/settings", data={
+                "port": "8123", "timeout": "12", "data_file": appmod.DATA_FILE,
+                "sub_token": "new-test-token", "url_suffix": "xyz", "login_max_fails": "4",
+                "login_lock_seconds": "1200", "max_remote_bytes": "3145728",
+                "fetch_cache_ttl": "300", "update_branch": "main", "username": appmod.BASIC_USER,
+            }, follow_redirects=False)
+            self.assertEqual(response.status_code, 303, response.text)
+            self.assertEqual(appmod.TIMEOUT, 12)
+            self.assertEqual(appmod.SUB_TOKEN, "new-test-token")
+            with open(appmod.CONFIG_ENV_FILE, encoding="utf-8") as saved:
+                self.assertIn("PORT=8123", saved.read())
+        finally:
+            for name, value in previous.items():
+                setattr(appmod, name, value)
+            for name, value in old_env.items():
+                if value is None:
+                    os.environ.pop(name, None)
+                else:
+                    os.environ[name] = value
 
     def test_manual_source_check_records_status(self):
         response = self.client.post("/sources/source-one/check", follow_redirects=False)
