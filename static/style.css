@@ -142,6 +142,78 @@ a:hover {
   margin: 0;
 }
 
+.add-subscription-menu {
+  position: relative;
+}
+
+.add-subscription-menu > summary {
+  list-style: none;
+}
+
+.add-subscription-menu > summary::-webkit-details-marker {
+  display: none;
+}
+
+.add-menu-panel {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 20;
+  display: grid;
+  min-width: 168px;
+  padding: 4px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--panel);
+  box-shadow: var(--shadow);
+}
+
+.add-subscription-menu:not([open]) > .add-menu-panel {
+  display: none;
+}
+
+.add-menu-panel a {
+  padding: 9px 10px;
+  border-radius: 4px;
+  color: var(--text);
+  text-decoration: none;
+}
+
+.add-menu-panel a:hover,
+.add-menu-panel a:focus-visible {
+  background: var(--panel-2);
+}
+
+.home-section-tabs {
+  display: inline-flex;
+  max-width: 100%;
+  gap: 3px;
+  margin-bottom: var(--gap);
+  padding: 3px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: #eef2f6;
+}
+
+.home-section-tab {
+  min-width: 112px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--muted);
+  font-weight: 600;
+}
+
+.home-section-tab[aria-selected="true"] {
+  background: #fff;
+  color: var(--text);
+  box-shadow: 0 1px 3px rgba(31, 42, 61, 0.14);
+}
+
+.home-section-tab[aria-selected="true"]:hover {
+  background: #fff;
+}
+
 .card {
   background: linear-gradient(180deg, var(--panel), var(--panel-2));
   border: 1px solid var(--border);
@@ -991,5 +1063,68 @@ body.modal-open {
 
   body {
     line-height: 1.4;
+  }
+}
+/* Composite subscription source picker */
+.source-picks {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin-top: 6px;
+}
+
+.source-pick {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--panel-2);
+}
+
+.source-pick input,
+.inline-option input {
+  width: 16px;
+  height: 16px;
+  margin: 0;
+}
+
+.source-pick span {
+  overflow-wrap: anywhere;
+}
+
+.source-pick small {
+  color: var(--muted);
+}
+
+.inline-option > label {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+@media (max-width: 680px) {
+  .home-section-tabs {
+    display: flex;
+    width: 100%;
+  }
+
+  .home-section-tab {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .source-picks {
+    grid-template-columns: 1fr;
+  }
+
+  .source-pick {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .source-pick small {
+    grid-column: 2;
   }
 }

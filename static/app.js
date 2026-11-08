@@ -2,6 +2,7 @@
   "use strict";
 
   var DENSITY_KEY = "scm_density_mode";
+  var HOME_SECTION_KEY = "scm_home_section";
   var TOAST_TIMEOUT = 2800;
 
   function qs(sel, root) {
@@ -153,6 +154,77 @@
     refresh();
     window.addEventListener("online", refresh, { passive: true });
     window.addEventListener("offline", refresh, { passive: true });
+  }
+
+  function initHomeSectionTabs() {
+    var tabs = qsa("[data-home-tab]");
+    if (!tabs.length) {
+      return;
+    }
+
+    var panels = tabs.map(function (tab) {
+      return qs("#" + tab.getAttribute("aria-controls"));
+    }).filter(Boolean);
+
+    function activate(name, persist) {
+      var activeTab = tabs.find(function (tab) {
+        return tab.getAttribute("data-home-tab") === name;
+      });
+      if (!activeTab) {
+        return;
+      }
+
+      tabs.forEach(function (tab) {
+        var active = tab === activeTab;
+        tab.setAttribute("aria-selected", active ? "true" : "false");
+        tab.tabIndex = active ? 0 : -1;
+      });
+      panels.forEach(function (panel) {
+        panel.hidden = panel.id !== activeTab.getAttribute("aria-controls");
+      });
+
+      if (persist) {
+        try {
+          window.localStorage.setItem(HOME_SECTION_KEY, name);
+        } catch (err) {
+          // Keep the selected panel usable when storage is unavailable.
+        }
+      }
+    }
+
+    tabs.forEach(function (tab, index) {
+      tab.addEventListener("click", function () {
+        activate(tab.getAttribute("data-home-tab"), true);
+      });
+      tab.addEventListener("keydown", function (event) {
+        var nextIndex = index;
+        if (event.key === "ArrowRight") {
+          nextIndex = (index + 1) % tabs.length;
+        } else if (event.key === "ArrowLeft") {
+          nextIndex = (index - 1 + tabs.length) % tabs.length;
+        } else if (event.key === "Home") {
+          nextIndex = 0;
+        } else if (event.key === "End") {
+          nextIndex = tabs.length - 1;
+        } else {
+          return;
+        }
+        event.preventDefault();
+        tabs[nextIndex].focus();
+        activate(tabs[nextIndex].getAttribute("data-home-tab"), true);
+      });
+    });
+
+    var initial = "sources";
+    try {
+      var saved = window.localStorage.getItem(HOME_SECTION_KEY);
+      if (tabs.some(function (tab) { return tab.getAttribute("data-home-tab") === saved; })) {
+        initial = saved;
+      }
+    } catch (err) {
+      // Use the default panel when storage is unavailable.
+    }
+    activate(initial, false);
   }
 
   function trimField(field) {
@@ -770,6 +842,61 @@
     sync();
   }
 
+  function initSourceKindDetection() {
+    var kind = qs("[data-source-kind]");
+    var value = qs("#source-value");
+    var file = qs("#source-file");
+    var preview = qs("[data-source-kind-preview]");
+    if (!kind || !value || !preview) {
+      return;
+    }
+
+    var labels = {
+      auto: "等待输入",
+      clash_url: "远程 Clash YAML",
+      v2ray_text: "V2Ray URI / Base64",
+      clash_yaml: "Clash YAML",
+    };
+
+    function detect() {
+      var text = value.value.trim();
+      var detected = "auto";
+      if (kind.value !== "auto") {
+        detected = kind.value;
+      } else if (file && file.files && file.files.length) {
+        detected = "clash_yaml";
+      } else if (/^https?:\/\/\S+$/i.test(text)) {
+        detected = "clash_url";
+      } else if (/(?:^|\n)\s*proxies\s*:/i.test(text)) {
+        detected = "clash_yaml";
+      } else if (text) {
+        var candidate = text;
+        if (!/^[a-z][a-z0-9+.-]*:\/\//im.test(candidate)) {
+          try {
+            var encoded = candidate.replace(/\s+/g, "").replace(/-/g, "+").replace(/_/g, "/");
+            while (encoded.length % 4) encoded += "=";
+            candidate = window.atob(encoded);
+          } catch (err) {
+            candidate = "";
+          }
+        }
+        var supportedSchemes = "vmess|vless|trojan|ss|shadowsocks|ssr|socks|socks5|socks5h|http|https|hysteria|hysteria2|hy2|tuic|anytls|mieru|mierus|wireguard|ssh|snell|shadowquic|gost-relay|sudoku|masque|trusttunnel|openvpn|tailscale|zerotier|easytier";
+        var uriPattern = new RegExp("(?:^|\\n)\\s*(?:" + supportedSchemes + "):\\/\\/", "im");
+        if (uriPattern.test(candidate)) {
+          detected = "v2ray_text";
+        }
+      }
+      preview.textContent = labels[detected] || labels.auto;
+    }
+
+    [kind, value, file].forEach(function (el) {
+      if (!el) return;
+      el.addEventListener("input", detect);
+      el.addEventListener("change", detect);
+    });
+    detect();
+  }
+
   function consumeToastParam() {
     var params = new URLSearchParams(window.location.search || "");
     var toastText = params.get("toast");
@@ -789,11 +916,13 @@
   document.addEventListener("DOMContentLoaded", function () {
     initDensityToggle();
     initOnlineState();
+    initHomeSectionTabs();
     initCopyTrigger();
     initFormGuards();
     initConfirmGuards();
     initSourceTable();
     initResultTools();
+    initSourceKindDetection();
     consumeToastParam();
   });
 })();

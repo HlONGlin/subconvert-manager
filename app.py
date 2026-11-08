@@ -1,4 +1,5 @@
 import base64
+import json
 import logging
 import os
 import re
@@ -9,7 +10,7 @@ import time
 import uuid
 from datetime import datetime
 from typing import Dict, List, Optional, Tuple
-from urllib.parse import urlparse
+from urllib.parse import quote, urlparse
 
 import requests
 import yaml
@@ -21,6 +22,8 @@ from fastapi.templating import Jinja2Templates
 from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.middleware.sessions import SessionMiddleware
 
+from exporter import build_custom_clash_template, build_singbox_config, is_singbox_supported
+from processor import process_proxies
 from converter import (
     build_clashplay_yaml,
     clash_yaml_to_v2ray_uris,
@@ -28,7 +31,20 @@ from converter import (
     uris_to_v2ray_subscription_base64,
     v2ray_uris_to_clash_proxies,
 )
-from storage import delete_source, get_source, list_sources, load_json, save_json, upsert_source
+from protocols import SCHEME_TYPES, YAML_ONLY_PROTOCOLS
+from storage import (
+    delete_profile,
+    delete_source,
+    get_profile,
+    get_source,
+    list_profiles,
+    list_sources,
+    load_json,
+    save_json,
+    upsert_profile,
+    upsert_source,
+    update_source_fields,
+)
 
 app = FastAPI(title="SubConvert Manager")
 logger = logging.getLogger(__name__)
@@ -262,6 +278,8 @@ _FETCH_CACHE: Dict[str, Tuple[float, str]] = {}
 _FETCH_CACHE_LOCK = threading.Lock()
 _FETCH_CACHE_TTL = max(0.0, _safe_float(os.environ.get("FETCH_CACHE_TTL", "5"), 5.0))
 _FETCH_CACHE_MAX = _clamp(_safe_int(os.environ.get("FETCH_CACHE_MAX", "256"), 256), 16, 4096)
+_SOURCE_STATUS_LOCK = threading.Lock()
+_SOURCE_STATUS_CACHE: Dict[str, Tuple[str, int, float]] = {}
 _LOGIN_FAIL_STATE: Dict[str, Tuple[int, float]] = {}
 _LOGIN_FAIL_LOCK = threading.Lock()
 
@@ -520,6 +538,81 @@ def _parse_clash_yaml_text(text: str) -> dict:
     return doc
 
 
+def _detect_source_kind(value: str, has_file: bool = False) -> str:
+    if has_file:
+        return "clash_yaml"
+
+    text = (value or "").strip()
+    parsed = urlparse(text)
+    if parsed.scheme.lower() in ("http", "https") and parsed.netloc:
+        return "clash_url"
+
+    try:
+        document = yaml.safe_load(text)
+    except Exception:
+        document = None
+    if isinstance(document, dict) and isinstance(document.get("proxies"), list):
+        return "clash_yaml"
+
+    known_schemes = set(SCHEME_TYPES) | set(YAML_ONLY_PROTOCOLS)
+    if any(uri.split("://", 1)[0].lower() in known_schemes for uri in split_v2ray_text(text)):
+        return "v2ray_text"
+
+    raise HTTPException(
+        status_code=400,
+        detail="Unable to detect source type. Provide a subscription URL, V2Ray URI/Base64, or Clash YAML.",
+    )
+
+
+def _source_proxies(src: dict, issues: Optional[List[dict]] = None) -> List[dict]:
+    kind = (src or {}).get("kind")
+    value = str((src or {}).get("value") or "")
+    if kind == "clash_url":
+        value = _fetch_text(value)
+    if kind in ("clash_url", "clash_yaml"):
+        return list(_parse_clash_yaml_text(value).get("proxies") or [])
+    if kind == "v2ray_text":
+        return v2ray_uris_to_clash_proxies(split_v2ray_text(value), issues=issues)
+    return []
+
+
+def _profile_or_404(pid: str, db: Optional[dict] = None) -> dict:
+    pid = _normalize_sid(pid)
+    profile = get_profile(db or _load_db(), pid)
+    if not profile:
+        raise HTTPException(status_code=404, detail="Profile not found")
+    return profile
+
+
+def _profile_proxies(profile: dict, issues: List[dict]) -> List[dict]:
+    db = _load_db()
+    nodes: List[dict] = []
+    for source_id in profile.get("source_ids") or []:
+        src = get_source(db, str(source_id))
+        if not src:
+            issues.append({"index": 0, "protocol": "source", "reason": f"missing source {source_id}", "severity": "error"})
+            continue
+        local_issues: List[dict] = []
+        try:
+            source_nodes = _checked_source_proxies(src, local_issues)
+            nodes.extend(source_nodes)
+            if not source_nodes:
+                issues.append({"index": 0, "protocol": "source", "reason": "source has no usable nodes", "severity": "error"})
+        except HTTPException:
+            issues.append({"index": 0, "protocol": "source", "reason": "source fetch or parse failed", "severity": "error"})
+        issues.extend(local_issues)
+    return process_proxies(
+        nodes,
+        filter_include=profile.get("filter_include") or "",
+        filter_exclude=profile.get("filter_exclude") or "",
+        filter_mode=profile.get("filter_mode") or "keyword",
+        rename_regex=profile.get("rename_regex") or "",
+        rename_with=profile.get("rename_with") or "",
+        dedupe=bool(profile.get("dedupe", True)),
+        sort=profile.get("sort") or "name",
+    )
+
+
 def _conversion_failure(issues: List[dict]) -> HTTPException:
     reasons = "; ".join(
         f"#{item['index']} {item['protocol']}: {item['reason']}"
@@ -537,7 +630,108 @@ def _conversion_response(body: str, issues: List[dict]) -> PlainTextResponse:
     return PlainTextResponse(body, headers={
         "X-Conversion-Skipped": str(skipped),
         "X-Conversion-Warnings": str(warnings),
+        "Cache-Control": "no-store",
     })
+
+
+def _record_source_result(
+    sid: str,
+    ok: bool,
+    node_count: int = 0,
+    partial: bool = False,
+    force: bool = False,
+) -> None:
+    status = "warning" if ok and partial else "ok" if ok else "failed"
+    checked_at = int(time.time())
+    now = time.monotonic()
+    with _SOURCE_STATUS_LOCK:
+        cached = _SOURCE_STATUS_CACHE.get(sid)
+        if not force and cached and cached[:2] == (status, node_count) and now - cached[2] < 60:
+            return
+        db = _load_db()
+        current = get_source(db, sid) or {}
+        last_checked = _safe_int(current.get("last_checked_at"), 0)
+        if (
+            not force
+            and current.get("last_status") == status
+            and _safe_int(current.get("last_node_count"), 0) == node_count
+            and checked_at - last_checked < 60
+        ):
+            _SOURCE_STATUS_CACHE[sid] = (status, node_count, now)
+            return
+        fields = {
+            "last_checked_at": checked_at,
+            "last_success_at": checked_at if ok else current.get("last_success_at", 0),
+            "last_status": status,
+            "last_node_count": node_count,
+            "last_error": "部分节点无法转换" if partial else "" if ok else "订阅获取或解析失败",
+        }
+        if update_source_fields(db, sid, fields):
+            _save_db(db)
+            _SOURCE_STATUS_CACHE[sid] = (status, node_count, now)
+
+
+def _checked_source_proxies(src: dict, issues: Optional[List[dict]] = None) -> List[dict]:
+    sid = str((src or {}).get("id") or "")
+    try:
+        nodes = _source_proxies(src, issues)
+        if sid:
+            has_errors = bool(issues and any(item.get("severity") == "error" for item in issues))
+            _record_source_result(sid, bool(nodes), len(nodes), partial=bool(nodes) and has_errors)
+        return nodes
+    except Exception:
+        if sid:
+            _record_source_result(sid, False)
+        raise
+
+
+def _profile_response(profile: dict, fmt: str, issues: List[dict]) -> PlainTextResponse:
+    nodes = _profile_proxies(profile, issues)
+    if not nodes:
+        raise _conversion_failure(issues)
+    fmt = (fmt or "clash").strip().lower()
+    if fmt in ("v2ray", "v2ray_raw"):
+        uris = clash_yaml_to_v2ray_uris({"proxies": nodes}, issues)
+        if not uris:
+            raise _conversion_failure(issues)
+        raw = "\n".join(uris) + "\n"
+        body = uris_to_v2ray_subscription_base64(uris) if fmt == "v2ray" else raw
+    elif fmt == "singbox":
+        return _singbox_response(nodes, issues)
+    else:
+        template = profile.get("custom_template") or ""
+        if template:
+            try:
+                doc = build_custom_clash_template(nodes, template)
+            except (yaml.YAMLError, ValueError):
+                raise HTTPException(status_code=422, detail="Invalid Clash template")
+        else:
+            doc = build_clashplay_yaml(
+                nodes,
+                rate_limit_mbps=_safe_int(profile.get("rate_limit_mbps"), 0),
+                sort_nodes=False,
+            )
+        body = yaml.safe_dump(doc, allow_unicode=True, sort_keys=False)
+    if not body.endswith("\n"):
+        body += "\n"
+    response = _conversion_response(body, issues)
+    response.headers["X-Node-Count"] = str(len(nodes))
+    return response
+
+
+def _singbox_response(nodes: List[dict], issues: List[dict]) -> Response:
+    prepared = process_proxies(nodes, dedupe=False, sort="source")
+    supported = [item for item in prepared if is_singbox_supported(item)]
+    if not supported:
+        raise HTTPException(status_code=422, detail="No nodes in this subscription are supported by the sing-box exporter")
+    body = json.dumps(build_singbox_config(supported), ensure_ascii=False, indent=2) + "\n"
+    response = Response(body, media_type="application/json")
+    response.headers["Cache-Control"] = "no-store"
+    response.headers["X-Node-Count"] = str(len(supported))
+    response.headers["X-Output-Skipped"] = str(len(nodes) - len(supported))
+    response.headers["X-Conversion-Skipped"] = str(sum(item.get("severity") == "error" for item in issues))
+    response.headers["X-Conversion-Warnings"] = str(sum(item.get("severity") == "warning" for item in issues))
+    return response
 
 
 def _load_db() -> Dict[str, object]:
@@ -559,6 +753,58 @@ def login_page(request: Request):
     if request.session.get("is_admin"):
         return RedirectResponse(url=_with_url_prefix("/"), status_code=302)
     return templates.TemplateResponse("login.html", _template_context(request, error=""))
+
+
+def _parse_source_ids(values: Optional[List[str]]) -> List[str]:
+    result: List[str] = []
+    for value in values or []:
+        for item in str(value).split(","):
+            item = item.strip()
+            if item and item not in result:
+                result.append(item)
+    return result
+
+
+def _validate_profile_form(
+    name: str,
+    source_ids: List[str],
+    filter_mode: str,
+    filter_include: str,
+    filter_exclude: str,
+    rename_regex: str,
+    rename_with: str,
+    rate_limit_mbps: str,
+) -> tuple:
+    name = (name or "").strip()
+    if not name:
+        raise HTTPException(status_code=400, detail="Profile name is required")
+    if len(name) > 80:
+        raise HTTPException(status_code=400, detail="Profile name is too long")
+    if not source_ids:
+        raise HTTPException(status_code=400, detail="Select at least one source")
+    mode = (filter_mode or "keyword").strip().lower()
+    if mode not in ("keyword", "regex"):
+        raise HTTPException(status_code=400, detail="Invalid filter mode")
+    if mode == "regex":
+        for value in (filter_include, filter_exclude):
+            for item in (value or "").splitlines():
+                if item.strip():
+                    try:
+                        re.compile(item.strip())
+                    except re.error as exc:
+                        raise HTTPException(status_code=400, detail=f"Invalid filter regex: {exc}")
+    pattern = (rename_regex or "").strip()
+    if pattern:
+        try:
+            re.compile(pattern)
+            re.sub(pattern, rename_with or "", "")
+        except re.error as exc:
+            raise HTTPException(status_code=400, detail=f"Invalid rename regex: {exc}")
+    replacement = rename_with or ""
+    rate = _safe_int(rate_limit_mbps, 0)
+    if not 0 <= rate <= 10000:
+        raise HTTPException(status_code=400, detail="Invalid rate limit")
+    return name, mode, pattern, replacement, rate
 
 
 @app.get("/setup", response_class=HTMLResponse)
@@ -704,20 +950,117 @@ def rotate_security_suffix(_=Depends(require_admin_auth)):
 
 @app.get("/", response_class=HTMLResponse)
 def home(request: Request, _=Depends(require_admin_auth)):
-    sources = list_sources(_load_db())
+    db = _load_db()
+    sources = list_sources(db)
     sources = sorted(sources, key=lambda s: _safe_int((s or {}).get("updated_at"), 0), reverse=True)
+    profiles = sorted(list_profiles(db), key=lambda s: _safe_int((s or {}).get("updated_at"), 0), reverse=True)
     return templates.TemplateResponse(
         "home.html",
         _template_context(
             request,
             sources=sources,
+            profiles=profiles,
             sub_token=SUB_TOKEN,
             url_suffix=URL_SUFFIX,
             suffix_enabled=bool(URL_SUFFIX),
-            security_warn=(BASIC_PASS == DEFAULT_BASIC_PASS) or (not SUB_TOKEN) or (not URL_SUFFIX),
             token_enabled=bool(SUB_TOKEN),
         ),
     )
+
+
+@app.get("/profiles/new", response_class=HTMLResponse)
+def profile_new(request: Request, _=Depends(require_admin_auth)):
+    return templates.TemplateResponse(
+        "profile_edit.html",
+        _template_context(request, profile=None, sources=list_sources(_load_db()), error=None),
+    )
+
+
+@app.get("/profiles/{pid}/edit", response_class=HTMLResponse)
+def profile_edit(request: Request, pid: str, _=Depends(require_admin_auth)):
+    profile = _profile_or_404(pid)
+    return templates.TemplateResponse(
+        "profile_edit.html",
+        _template_context(request, profile=profile, sources=list_sources(_load_db()), error=None),
+    )
+
+
+@app.post("/profiles/save")
+def profile_save(
+    pid: str = Form(""),
+    name: str = Form(""),
+    source_ids: List[str] = Form([]),
+    filter_include: str = Form(""),
+    filter_exclude: str = Form(""),
+    filter_mode: str = Form("keyword"),
+    rename_regex: str = Form(""),
+    rename_with: str = Form(""),
+    dedupe: str = Form(""),
+    sort: str = Form("name"),
+    clash_template: str = Form("default"),
+    custom_template: str = Form(""),
+    rate_limit_mbps: str = Form("0"),
+    _=Depends(require_admin_auth),
+):
+    name, mode, pattern, replacement, rate = _validate_profile_form(
+        name, _parse_source_ids(source_ids), filter_mode,
+        filter_include, filter_exclude, rename_regex, rename_with, rate_limit_mbps
+    )
+    if sort not in ("name", "name_desc", "protocol", "source"):
+        sort = "name"
+    if clash_template not in ("default", "custom"):
+        clash_template = "default"
+    custom = custom_template.strip()
+    if clash_template == "custom":
+        if not custom:
+            raise HTTPException(status_code=400, detail="Custom Clash template is empty")
+        try:
+            custom_doc = yaml.safe_load(custom)
+            if not isinstance(custom_doc, dict):
+                raise ValueError
+        except (yaml.YAMLError, ValueError):
+            raise HTTPException(status_code=400, detail="Clash template must be a YAML mapping")
+    else:
+        custom = ""
+    db = _load_db()
+    if pid:
+        profile = _profile_or_404(pid, db)
+    else:
+        pid = uuid.uuid4().hex[:10]
+        profile = {}
+    known = {str(item.get("id") or "") for item in list_sources(db)}
+    requested = _parse_source_ids(source_ids)
+    if any(item not in known for item in requested):
+        raise HTTPException(status_code=400, detail="One or more selected sources no longer exist")
+    selected = requested
+    profile = {
+        **profile,
+        "id": pid,
+        "name": name,
+        "source_ids": selected,
+        "filter_include": filter_include.strip(),
+        "filter_exclude": filter_exclude.strip(),
+        "filter_mode": mode,
+        "rename_regex": pattern,
+        "rename_with": replacement,
+        "dedupe": bool(dedupe),
+        "sort": sort,
+        "clash_template": clash_template,
+        "custom_template": custom,
+        "rate_limit_mbps": rate,
+    }
+    upsert_profile(db, profile)
+    _save_db(db)
+    return RedirectResponse(url=_with_url_prefix("/?toast=组合订阅已保存"), status_code=303)
+
+
+@app.post("/profiles/{pid}/delete")
+def profile_delete(pid: str, _=Depends(require_admin_auth)):
+    db = _load_db()
+    _profile_or_404(pid, db)
+    delete_profile(db, pid)
+    _save_db(db)
+    return RedirectResponse(url=_with_url_prefix("/?toast=组合订阅已删除"), status_code=303)
 
 
 @app.get("/convert", response_class=HTMLResponse)
@@ -839,8 +1182,11 @@ async def source_save(
     if len(name) > 80:
         raise HTTPException(status_code=400, detail="Name is too long")
 
-    if kind not in {"clash_url", "v2ray_text", "clash_yaml"}:
+    if kind not in {"auto", "clash_url", "v2ray_text", "clash_yaml"}:
         raise HTTPException(status_code=400, detail="Invalid source type")
+
+    if kind == "auto":
+        kind = _detect_source_kind(value, has_file=bool(file is not None and file.filename))
 
     if rate_limit < 0 or rate_limit > 10000:
         raise HTTPException(status_code=400, detail="Invalid rate limit")
@@ -875,6 +1221,8 @@ async def source_save(
         },
     )
     _save_db(db)
+    with _SOURCE_STATUS_LOCK:
+        _SOURCE_STATUS_CACHE.pop(sid, None)
     return RedirectResponse(url=_with_url_prefix("/?toast=保存成功"), status_code=303)
 
 
@@ -884,7 +1232,27 @@ def source_delete(sid: str, _=Depends(require_admin_auth)):
     db = _load_db()
     delete_source(db, sid)
     _save_db(db)
+    with _SOURCE_STATUS_LOCK:
+        _SOURCE_STATUS_CACHE.pop(sid, None)
     return RedirectResponse(url=_with_url_prefix("/?toast=删除成功"), status_code=303)
+
+
+@app.post("/sources/{sid}/check")
+def source_check(sid: str, _=Depends(require_admin_auth)):
+    src = _source_or_404(sid)
+    issues: List[dict] = []
+    try:
+        nodes = _checked_source_proxies(src, issues)
+        partial = any(item.get("severity") == "error" for item in issues)
+        _record_source_result(sid, bool(nodes), len(nodes), partial=bool(nodes) and partial, force=True)
+        if not nodes:
+            message = "订阅检查失败：没有可用节点"
+        else:
+            message = f"订阅检查成功：{len(nodes)} 个节点"
+    except HTTPException:
+        _record_source_result(sid, False, force=True)
+        message = "订阅检查失败，请检查来源地址和内容"
+    return RedirectResponse(url=_with_url_prefix("/?toast=" + quote(message)), status_code=303)
 
 
 def _resolve_to_uris(src: dict, issues: Optional[List[dict]] = None) -> List[str]:
@@ -924,6 +1292,14 @@ def _resolve_to_clash_yaml(src: dict, template: str = "", issues: Optional[List[
     return yaml.safe_dump(doc, allow_unicode=True, sort_keys=False)
 
 
+def _source_uris(src: dict, nodes: List[dict], issues: List[dict]) -> List[str]:
+    if src.get("kind") == "v2ray_text":
+        result = split_v2ray_text(str(src.get("value") or ""))
+    else:
+        result = clash_yaml_to_v2ray_uris({"proxies": nodes}, issues)
+    return result
+
+
 def _source_or_404(sid: str) -> dict:
     sid = _normalize_sid(sid)
     src = get_source(_load_db(), sid)
@@ -935,7 +1311,9 @@ def _source_or_404(sid: str) -> dict:
 @app.get("/s/{sid}/v2ray", response_class=PlainTextResponse)
 def sub_v2ray_b64(sid: str, _=Depends(require_admin_auth)):
     issues: List[dict] = []
-    uris = _resolve_to_uris(_source_or_404(sid), issues=issues)
+    src = _source_or_404(sid)
+    nodes = _checked_source_proxies(src, issues)
+    uris = _source_uris(src, nodes, issues)
     if not uris:
         raise _conversion_failure(issues)
     return _conversion_response(uris_to_v2ray_subscription_base64(uris), issues)
@@ -944,7 +1322,9 @@ def sub_v2ray_b64(sid: str, _=Depends(require_admin_auth)):
 @app.get("/s/{sid}/v2ray_raw", response_class=PlainTextResponse)
 def sub_v2ray_raw(sid: str, _=Depends(require_admin_auth)):
     issues: List[dict] = []
-    uris = _resolve_to_uris(_source_or_404(sid), issues=issues)
+    src = _source_or_404(sid)
+    nodes = _checked_source_proxies(src, issues)
+    uris = _source_uris(src, nodes, issues)
     if not uris:
         raise _conversion_failure(issues)
     return _conversion_response("\n".join(uris) + "\n", issues)
@@ -953,15 +1333,30 @@ def sub_v2ray_raw(sid: str, _=Depends(require_admin_auth)):
 @app.get("/s/{sid}/clash", response_class=PlainTextResponse)
 def sub_clash(sid: str, template: str = "", _=Depends(require_admin_auth)):
     issues: List[dict] = []
-    y = _resolve_to_clash_yaml(_source_or_404(sid), template=template, issues=issues)
+    src = _source_or_404(sid)
+    nodes = _checked_source_proxies(src, issues)
+    if src.get("kind") == "v2ray_text":
+        doc = build_clashplay_yaml(nodes, rate_limit_mbps=_safe_int(src.get("rate_limit_mbps"), 0))
+        y = yaml.safe_dump(doc, allow_unicode=True, sort_keys=False)
+    else:
+        y = _resolve_to_clash_yaml(src, template=template, issues=issues)
     return _conversion_response(y if y.endswith("\n") else y + "\n", issues)
+
+
+@app.get("/s/{sid}/singbox")
+def sub_singbox(sid: str, _=Depends(require_admin_auth)):
+    issues: List[dict] = []
+    nodes = _checked_source_proxies(_source_or_404(sid), issues)
+    return _singbox_response(nodes, issues)
 
 
 @app.get("/pub/s/{sid}/v2ray", response_class=PlainTextResponse)
 def pub_v2ray_b64(sid: str, token: str = ""):
     require_sub_token(token)
     issues: List[dict] = []
-    uris = _resolve_to_uris(_source_or_404(sid), issues=issues)
+    src = _source_or_404(sid)
+    nodes = _checked_source_proxies(src, issues)
+    uris = _source_uris(src, nodes, issues)
     if not uris:
         raise _conversion_failure(issues)
     return _conversion_response(uris_to_v2ray_subscription_base64(uris), issues)
@@ -971,7 +1366,9 @@ def pub_v2ray_b64(sid: str, token: str = ""):
 def pub_v2ray_raw(sid: str, token: str = ""):
     require_sub_token(token)
     issues: List[dict] = []
-    uris = _resolve_to_uris(_source_or_404(sid), issues=issues)
+    src = _source_or_404(sid)
+    nodes = _checked_source_proxies(src, issues)
+    uris = _source_uris(src, nodes, issues)
     if not uris:
         raise _conversion_failure(issues)
     return _conversion_response("\n".join(uris) + "\n", issues)
@@ -981,5 +1378,47 @@ def pub_v2ray_raw(sid: str, token: str = ""):
 def pub_clash(sid: str, token: str = "", template: str = ""):
     require_sub_token(token)
     issues: List[dict] = []
-    y = _resolve_to_clash_yaml(_source_or_404(sid), template=template, issues=issues)
+    src = _source_or_404(sid)
+    nodes = _checked_source_proxies(src, issues)
+    if src.get("kind") == "v2ray_text":
+        doc = build_clashplay_yaml(nodes, rate_limit_mbps=_safe_int(src.get("rate_limit_mbps"), 0))
+        y = yaml.safe_dump(doc, allow_unicode=True, sort_keys=False)
+    else:
+        y = _resolve_to_clash_yaml(src, template=template, issues=issues)
     return _conversion_response(y if y.endswith("\n") else y + "\n", issues)
+
+
+@app.get("/pub/s/{sid}/singbox")
+def pub_singbox(sid: str, token: str = ""):
+    require_sub_token(token)
+    issues: List[dict] = []
+    nodes = _checked_source_proxies(_source_or_404(sid), issues)
+    return _singbox_response(nodes, issues)
+
+
+@app.get("/p/{pid}/clash", response_class=PlainTextResponse)
+def profile_clash(pid: str, _=Depends(require_admin_auth)):
+    return _profile_response(_profile_or_404(pid), "clash", [])
+
+
+@app.get("/p/{pid}/v2ray", response_class=PlainTextResponse)
+def profile_v2ray(pid: str, _=Depends(require_admin_auth)):
+    return _profile_response(_profile_or_404(pid), "v2ray", [])
+
+
+@app.get("/p/{pid}/v2ray_raw", response_class=PlainTextResponse)
+def profile_v2ray_raw(pid: str, _=Depends(require_admin_auth)):
+    return _profile_response(_profile_or_404(pid), "v2ray_raw", [])
+
+
+@app.get("/p/{pid}/singbox", response_class=PlainTextResponse)
+def profile_singbox(pid: str, _=Depends(require_admin_auth)):
+    return _profile_response(_profile_or_404(pid), "singbox", [])
+
+
+@app.get("/pub/p/{pid}/{fmt}", response_class=PlainTextResponse)
+def pub_profile(pid: str, fmt: str, token: str = ""):
+    require_sub_token(token)
+    if fmt not in ("clash", "v2ray", "v2ray_raw", "singbox"):
+        raise HTTPException(status_code=404, detail="Unsupported profile output")
+    return _profile_response(_profile_or_404(pid), fmt, [])

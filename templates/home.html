@@ -4,7 +4,7 @@
   <meta charset="utf-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <title>SubConvert Manager</title>
-  <link rel="stylesheet" href="{{ url_prefix }}/static/style.css"/>
+  <link rel="stylesheet" href="{{ url_prefix }}/static/style.css?v=home-tabs-20261108"/>
 </head>
 <body>
   <div class="wrap">
@@ -15,7 +15,13 @@
       </div>
       <div class="top-actions">
         <a class="btn primary" href="{{ url_prefix }}/convert" aria-label="在线转换">在线转换</a>
-        <a class="btn" href="{{ url_prefix }}/sources/new" aria-label="新增订阅源">新增订阅源</a>
+        <details class="add-subscription-menu">
+          <summary class="btn primary" aria-label="新增订阅">新增订阅</summary>
+          <div class="add-menu-panel">
+            <a href="{{ url_prefix }}/sources/new">新增订阅源</a>
+            <a href="{{ url_prefix }}/profiles/new">新增组合订阅</a>
+          </div>
+        </details>
         <button class="btn" type="button" data-density-toggle aria-label="切换页面密度">
           <span data-density-label>切换为紧凑</span>
         </button>
@@ -23,18 +29,57 @@
       </div>
     </div>
 
-    {% if security_warn %}
-    <div class="card">
-      <div class="kv" style="justify-content:space-between;">
-        <span class="badge warn">安全提醒</span>
-        <span class="hint">请尽快更新密码，并配置 SUB_TOKEN 与 URL_SUFFIX。</span>
-      </div>
-      <hr class="sep"/>
-      <div class="hint"><span class="mono">config.env</span> 建议配置强密码、随机 <span class="mono">SUB_TOKEN</span> 和 <span class="mono">URL_SUFFIX</span>。</div>
+    <div class="home-section-tabs" role="tablist" aria-label="订阅管理区域">
+      <button class="home-section-tab" type="button" role="tab" id="tab-profiles" aria-controls="panel-profiles" aria-selected="false" tabindex="-1" data-home-tab="profiles">组合订阅</button>
+      <button class="home-section-tab" type="button" role="tab" id="tab-sources" aria-controls="panel-sources" aria-selected="true" tabindex="0" data-home-tab="sources">订阅源</button>
     </div>
-    {% endif %}
 
-    <div class="card" data-state-region="sources">
+    <div class="card" id="panel-profiles" role="tabpanel" aria-labelledby="tab-profiles" data-state-region="profiles" hidden>
+      <div class="kv" style="justify-content:space-between;align-items:center;">
+        <div>
+          <h3>组合订阅</h3>
+          <div class="hint">合并多个来源，并应用节点筛选、去重和重命名。</div>
+        </div>
+      </div>
+      {% if profiles %}
+      <div class="table-wrap" style="margin-top:12px;">
+        <table class="tbl" aria-label="组合订阅列表">
+          <thead><tr><th>名称</th><th>来源</th><th>更新时间</th><th>客户端链接</th><th class="sticky-col">操作</th></tr></thead>
+          <tbody>
+            {% for p in profiles %}
+            {% set profile_base = request.base_url|string ~ (url_prefix[1:] ~ '/' if url_prefix else '') ~ 'pub/p/' ~ p.id %}
+            {% set token_query = '?token=' ~ sub_token %}
+            <tr>
+              <td data-label="名称"><strong>{{ p.name }}</strong></td>
+              <td data-label="来源">{{ p.source_ids|length }} 个</td>
+              <td data-label="更新时间"><span class="mono">{{ p.updated_at|fmt_ts }}</span></td>
+              <td data-label="订阅链接">
+                <details class="inline-details">
+                  <summary>查看链接</summary>
+                  <div class="link-stack mono">
+                    {% for label, fmt in [('Clash YAML', 'clash'), ('V2Ray Base64', 'v2ray'), ('V2Ray Raw', 'v2ray_raw'), ('sing-box JSON', 'singbox')] %}
+                    <div class="link-row"><strong>{{ label }}</strong><button class="btn ghost" type="button" data-copy-text="{{ profile_base }}/{{ fmt }}{{ token_query }}" aria-label="复制 {{ label }} 订阅链接">复制</button></div>
+                    {% endfor %}
+                  </div>
+                </details>
+              </td>
+              <td class="sticky-col" data-label="操作">
+                <div class="actions row-actions">
+                  <a class="btn" href="{{ url_prefix }}/profiles/{{ p.id }}/edit" aria-label="编辑 {{ p.name }}">编辑</a>
+                  <form action="{{ url_prefix }}/profiles/{{ p.id }}/delete" method="post" data-lock-submit data-confirm="确认删除这个组合订阅？"><button class="btn danger" type="submit">删除</button></form>
+                </div>
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% else %}
+      <div class="empty" style="margin-top:12px;">尚无组合订阅</div>
+      {% endif %}
+    </div>
+
+    <div class="card" id="panel-sources" role="tabpanel" aria-labelledby="tab-sources" data-state-region="sources">
       <div class="kv" style="justify-content:space-between;align-items:flex-start;">
         <div>
           <h3>订阅源</h3>
@@ -55,10 +100,7 @@
       {% if sources|length == 0 %}
       <div class="empty" style="margin-top:12px;">
         <div class="state-title">暂无订阅源</div>
-        <div class="hint">点击“新增订阅源”开始使用。</div>
-        <div class="actions" style="margin-top:10px;">
-          <a class="btn primary" href="{{ url_prefix }}/sources/new">新增订阅源</a>
-        </div>
+        <div class="hint">使用顶部“新增订阅”菜单创建订阅源或组合订阅。</div>
       </div>
       {% else %}
       <div class="toolbar" role="group" aria-label="筛选工具">
@@ -147,6 +189,7 @@
               <th scope="col">名称</th>
               <th scope="col">类型</th>
               <th scope="col">更新时间</th>
+              <th scope="col">最近状态</th>
               <th scope="col">订阅输出</th>
               <th scope="col" class="sticky-col">操作</th>
             </tr>
@@ -168,6 +211,13 @@
               <td data-label="更新时间">
                 <div class="mono">{{ s.updated_at|fmt_ts }}</div>
               </td>
+              <td data-label="最近状态">
+                {% if s.last_status == 'ok' %}<span class="badge ok">正常 · {{ s.last_node_count or 0 }} 节点</span>
+                {% elif s.last_status == 'warning' %}<span class="badge warn">部分节点跳过 · {{ s.last_node_count or 0 }} 节点</span>
+                {% elif s.last_status == 'failed' %}<span class="badge danger">刷新失败</span>
+                {% else %}<span class="badge">未检查</span>{% endif %}
+                {% if s.last_checked_at %}<div class="hint">{{ s.last_checked_at|fmt_ts }}</div>{% endif %}
+              </td>
               <td data-label="订阅">
                 <details class="inline-details">
                   <summary>查看链接</summary>
@@ -184,11 +234,18 @@
                       <strong>Clash play</strong>
                       <button class="btn ghost" type="button" data-copy-text="{{ u_clash_play }}" aria-label="复制 Clash play 链接">复制</button>
                     </div>
+                    <div class="link-row">
+                      <strong>sing-box JSON</strong>
+                      <button class="btn ghost" type="button" data-copy-text="{{ base ~ (url_prefix[1:] ~ '/' if url_prefix else '') ~ 'pub/s/' ~ sid ~ '/singbox?token=' ~ sub_token }}" aria-label="复制 sing-box 订阅链接">复制</button>
+                    </div>
                   </div>
                 </details>
               </td>
               <td class="sticky-col" data-label="操作">
                 <div class="actions row-actions">
+                  <form action="{{ url_prefix }}/sources/{{ sid }}/check" method="post" data-lock-submit>
+                    <button class="btn" type="submit" aria-label="检查 {{ s.name }}">检查</button>
+                  </form>
                   <a class="btn" href="{{ url_prefix }}/sources/{{ sid }}/edit" aria-label="编辑 {{ s.name }}">编辑</a>
                   <form action="{{ url_prefix }}/sources/{{ sid }}/delete" method="post" data-lock-submit data-confirm="确认删除？">
                     <button class="btn danger" type="submit" aria-label="删除 {{ s.name }}">删除</button>
@@ -209,6 +266,6 @@
     <div class="msg"></div>
   </div>
 
-  <script src="{{ url_prefix }}/static/app.js"></script>
+  <script src="{{ url_prefix }}/static/app.js?v=home-tabs-20261108"></script>
 </body>
 </html>

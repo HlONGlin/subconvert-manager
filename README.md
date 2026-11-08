@@ -29,11 +29,31 @@
 |------|------|
 | 🔐 管理员初始化 | 首次访问自动跳转 `/setup`，引导设置账号密码 |
 | 📦 订阅源管理 | 支持 `clash_url` / `clash_yaml` / `v2ray_text` 三种来源 |
+| 🧩 组合订阅 | 多来源合并，支持关键词/正则筛选、重命名、去重与排序 |
 | 🔄 在线格式转换 | Clash → V2Ray（Base64 / Raw）、V2Ray → Clash（play 模板）|
+| 📤 多客户端输出 | 组合订阅可输出 Clash、V2Ray 与 sing-box JSON；不支持的 sing-box 节点会通过响应头计数 |
+| 🩺 来源检查 | 可手动检查订阅源；客户端拉取时同步更新最近检查状态与节点数 |
 | 🔗 私有订阅接口 | `/s/{sid}/v2ray`、`/s/{sid}/clash` 需登录访问 |
 | 🌐 公共订阅接口 | `/pub/s/{sid}/...?token=...` 供客户端直接使用 |
 | 🛡️ 安全路径隔离 | `URL_SUFFIX` 为所有路由加路径前缀，防止扫描 |
 | 🚦 登录保护 | 连续失败锁定，支持 Basic Auth + Session 双模式 |
+
+### 组合订阅
+
+在首页创建组合订阅后，可选择多个已有来源，并按节点名称配置保留/排除条件。筛选支持关键词或正则表达式；重命名使用 Python 正则替换语法。重复节点按连接参数去重，输出可按名称、协议或来源顺序排列。
+
+每个组合订阅提供以下公开接口，均使用 `SUB_TOKEN` 鉴权：
+
+| 输出 | 接口后缀 |
+|------|------|
+| Clash YAML | `/pub/p/{id}/clash` |
+| V2Ray Base64 | `/pub/p/{id}/v2ray` |
+| V2Ray Raw | `/pub/p/{id}/v2ray_raw` |
+| sing-box JSON | `/pub/p/{id}/singbox` |
+
+sing-box 当前转换 Shadowsocks（无插件）、VMess、VLESS、Trojan、Hysteria2、TUIC、AnyTLS、SOCKS5、HTTP 与单 peer WireGuard。其他协议或无法映射的节点会跳过，响应头 `X-Output-Skipped` 返回数量；若没有可输出节点则返回 HTTP 422。Clash 原生 YAML 仍保留原样分发。
+
+来源状态会在手动点击“检查”或订阅接口拉取时更新，不执行后台定时轮询。来源列表显示最近检查时间、状态和解析到的节点数。
 
 ---
 

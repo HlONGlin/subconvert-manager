@@ -1,3 +1,19 @@
+# v1.1.0
+
+## Highlights
+
+- Add combined subscriptions with source merging, keyword/regex filters, renaming, deduplication, sorting, and custom Clash templates.
+- Add Clash, V2Ray, and sing-box outputs, plus source checks and recent status reporting.
+- Detect subscription source types automatically and remember the selected home section.
+- Remove the top security reminder and improve protocol conversion diagnostics and metadata.
+
+## Verification
+
+- 76 unit tests pass.
+- Mihomo schema integration remains skipped unless `MIHOMO_BINARY` is configured.
+
+---
+
 # v1.0.2
 
 ## Highlights

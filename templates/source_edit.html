@@ -31,12 +31,13 @@
 
           <div class="row">
             <label for="source-kind">类型</label>
-            <select id="source-kind" name="kind" required aria-label="订阅源类型">
+            <select id="source-kind" name="kind" required aria-label="订阅源类型" data-source-kind>
+              <option value="auto" {% if not src %}selected{% endif %}>自动识别</option>
               <option value="clash_url" {% if src and src.kind=='clash_url' %}selected{% endif %}>clash_url（远程 YAML）</option>
               <option value="v2ray_text" {% if src and src.kind=='v2ray_text' %}selected{% endif %}>v2ray_text（多行 URI / base64）</option>
               <option value="clash_yaml" {% if src and src.kind=='clash_yaml' %}selected{% endif %}>clash_yaml（本地文本/文件）</option>
             </select>
-            <div class="hint">后端会按类型进行解析和校验。</div>
+            <div class="hint" data-source-kind-hint>识别结果：<span data-source-kind-preview>等待输入</span></div>
           </div>
 
           <div class="quick-grid">
@@ -70,13 +71,13 @@
               name="value"
               class="out"
               style="height:240px;"
-              placeholder="clash_url: 粘贴 URL\nv2ray_text: 粘贴 URI 或 base64\nclash_yaml: 粘贴 YAML"
+              placeholder="粘贴订阅 URL、V2Ray URI / Base64 或 Clash YAML"
               aria-label="订阅源内容"
             >{{ src.value if src else '' }}</textarea>
           </div>
 
           <div class="row">
-            <label for="source-file">仅 clash_yaml 可上传文件覆盖文本</label>
+            <label for="source-file">上传 YAML 文件（文件内容将覆盖文本）</label>
             <input id="source-file" type="file" name="file" accept=".yaml,.yml,text/yaml" aria-label="上传 YAML 文件"/>
           </div>
 

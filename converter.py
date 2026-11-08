@@ -108,6 +108,7 @@ def build_clashplay_yaml(
     test_url: str = "https://www.gstatic.com/generate_204",
     interval_sec: int = 300,
     tolerance_ms: int = 50,
+    sort_nodes: bool = True,
 ) -> Dict:
     """
     Build a ClashPlay-style YAML document from parsed proxies.
@@ -134,7 +135,8 @@ def build_clashplay_yaml(
         return build_clash_yaml([])
 
     cleaned = normalize_proxy_names(cleaned)
-    cleaned.sort(key=lambda x: _keyword_sort_key(x.get('name') or ''))
+    if sort_nodes:
+        cleaned.sort(key=lambda x: _keyword_sort_key(x.get('name') or ''))
 
     # 2) keep every node as an individual selectable entry.
     # Do not generate url-test or load-balance groups.
