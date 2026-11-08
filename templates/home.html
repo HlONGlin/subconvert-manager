@@ -1,46 +1,71 @@
 <!doctype html>
-<html lang="zh-CN">
+<html lang="zh-CN" data-theme="linear">
 <head>
   <meta charset="utf-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <title>SubConvert Manager</title>
-  <link rel="stylesheet" href="{{ url_prefix }}/static/style.css?v=home-tabs-20261108"/>
+  <script>(function(){var t="linear";try{t=localStorage.getItem("scm_theme")||t;}catch(e){}if(!/^(linear|vercel|supabase|stripe|notion|raycast|mintlify|warp|sentry|claude)$/.test(t))t="linear";document.documentElement.setAttribute("data-theme",t);}());</script>
+  <link rel="stylesheet" href="{{ url_prefix }}/static/style.css?v=themes-20261108&source-layout=4"/>
 </head>
 <body>
   <div class="wrap">
-    <div class="top">
-      <div class="brand">
-        <h1>SubConvert Manager</h1>
-        <div class="sub">订阅管理与转换</div>
-      </div>
-      <div class="top-actions">
-        <a class="btn primary" href="{{ url_prefix }}/convert" aria-label="在线转换">在线转换</a>
-        <a class="btn" href="{{ url_prefix }}/admin/settings">设置</a>
-        <details class="add-subscription-menu">
-          <summary class="btn primary" aria-label="新增订阅">新增订阅</summary>
-          <div class="add-menu-panel">
-            <a href="{{ url_prefix }}/sources/new">新增订阅源</a>
-            <a href="{{ url_prefix }}/profiles/new">新增组合订阅</a>
-          </div>
-        </details>
-        <button class="btn" type="button" data-density-toggle aria-label="切换页面密度">
-          <span data-density-label>切换为紧凑</span>
+    <div class="home-layout">
+      <aside class="home-sidebar" id="home-sidebar">
+        <button class="sidebar-toggle" type="button" data-sidebar-toggle aria-expanded="false" aria-controls="home-sidebar-content">
+          <span class="sidebar-toggle-icon" aria-hidden="true"><i></i><i></i><i></i></span><span>菜单</span>
         </button>
-        <a class="btn danger" href="{{ url_prefix }}/logout" aria-label="退出登录">退出登录</a>
-      </div>
+        <div class="home-sidebar-content" id="home-sidebar-content">
+        <div class="brand">
+          <h1>SubConvert Manager</h1>
+          <div class="sub">订阅管理与转换</div>
+        </div>
+        <nav class="home-section-tabs" role="tablist" aria-orientation="vertical" aria-label="订阅管理区域">
+          <button class="home-section-tab" type="button" role="tab" id="tab-sources" aria-controls="panel-sources" aria-selected="true" tabindex="0" data-home-tab="sources">订阅源</button>
+          <button class="home-section-tab" type="button" role="tab" id="tab-profiles" aria-controls="panel-profiles" aria-selected="false" tabindex="-1" data-home-tab="profiles">组合订阅</button>
+        </nav>
+        <div class="home-sidebar-tools">
+          <details class="add-subscription-menu">
+            <summary class="home-section-tab" aria-label="新增订阅">新增订阅</summary>
+            <div class="add-menu-panel">
+              <a href="{{ url_prefix }}/sources/new">新增订阅源</a>
+              <a href="{{ url_prefix }}/profiles/new">新增组合订阅</a>
+            </div>
+          </details>
+          <a class="home-section-tab" href="{{ url_prefix }}/convert" aria-label="在线转换">在线转换</a>
+        </div>
+        <div class="home-sidebar-actions">
+          <a class="btn" href="{{ url_prefix }}/admin/settings">设置</a>
+          <button class="btn" type="button" data-density-toggle aria-label="切换页面密度">
+            <span data-density-label>切换为紧凑</span>
+          </button>
+          <details class="theme-picker">
+            <summary class="home-section-tab theme-picker-toggle" aria-label="主题"><span>主题</span><span class="theme-current" data-theme-current>Linear</span></summary>
+            <div class="theme-picker-panel">
+              <div class="theme-grid">
+              <button class="theme-swatch" type="button" data-theme-choice="linear" aria-label="Linear" title="Linear" aria-pressed="false"><span></span></button>
+              <button class="theme-swatch" type="button" data-theme-choice="vercel" aria-label="Vercel" title="Vercel" aria-pressed="false"><span></span></button>
+              <button class="theme-swatch" type="button" data-theme-choice="supabase" aria-label="Supabase" title="Supabase" aria-pressed="false"><span></span></button>
+              <button class="theme-swatch" type="button" data-theme-choice="stripe" aria-label="Stripe" title="Stripe" aria-pressed="false"><span></span></button>
+              <button class="theme-swatch" type="button" data-theme-choice="notion" aria-label="Notion" title="Notion" aria-pressed="false"><span></span></button>
+              <button class="theme-swatch" type="button" data-theme-choice="raycast" aria-label="Raycast" title="Raycast" aria-pressed="false"><span></span></button>
+              <button class="theme-swatch" type="button" data-theme-choice="mintlify" aria-label="Mintlify" title="Mintlify" aria-pressed="false"><span></span></button>
+              <button class="theme-swatch" type="button" data-theme-choice="warp" aria-label="Warp" title="Warp" aria-pressed="false"><span></span></button>
+              <button class="theme-swatch" type="button" data-theme-choice="sentry" aria-label="Sentry" title="Sentry" aria-pressed="false"><span></span></button>
+              <button class="theme-swatch" type="button" data-theme-choice="claude" aria-label="Claude" title="Claude" aria-pressed="false"><span></span></button>
+              </div>
+            </div>
+          </details>
+          <a class="btn danger" href="{{ url_prefix }}/logout" aria-label="退出登录">退出登录</a>
+        </div>
+        </div>
+      </aside>
+      <main class="home-main">
+    {% if failed_sources %}
+    <div class="state-block error" role="alert" style="margin-top:12px;">
+      <div class="state-title">订阅检查失败：{{ failed_sources|length }}</div>
+      {% for source in failed_sources %}<div>{{ source.name }}{% if source.last_error %}：{{ source.last_error }}{% endif %}</div>{% endfor %}
     </div>
-
-    <div class="quick-grid" aria-label="订阅总览">
-      <div class="card"><div class="hint">订阅源 / 失败</div><strong>{{ source_count }} / {{ failed_source_count }}</strong></div>
-      <div class="card"><div class="hint">组合订阅</div><strong>{{ profile_count }}</strong></div>
-      <div class="card"><div class="hint">节点总数</div><strong>{{ node_count }}</strong></div>
-      <div class="card"><div class="hint">版本</div><strong>v{{ version }}</strong></div>
-    </div>
-
-    <div class="home-section-tabs" role="tablist" aria-label="订阅管理区域">
-      <button class="home-section-tab" type="button" role="tab" id="tab-profiles" aria-controls="panel-profiles" aria-selected="false" tabindex="-1" data-home-tab="profiles">组合订阅</button>
-      <button class="home-section-tab" type="button" role="tab" id="tab-sources" aria-controls="panel-sources" aria-selected="true" tabindex="0" data-home-tab="sources">订阅源</button>
-    </div>
+    {% endif %}
 
     <div class="card" id="panel-profiles" role="tabpanel" aria-labelledby="tab-profiles" data-state-region="profiles" hidden>
       <div class="kv" style="justify-content:space-between;align-items:center;">
@@ -52,15 +77,16 @@
       {% if profiles %}
       <div class="table-wrap" style="margin-top:12px;">
         <table class="tbl" aria-label="组合订阅列表">
-          <thead><tr><th>名称</th><th>来源</th><th>更新时间</th><th>客户端链接</th><th class="sticky-col">操作</th></tr></thead>
+          <thead><tr><th>名称</th><th>来源</th><th>更新时间</th><th>访问统计</th><th>客户端链接</th><th class="sticky-col">操作</th></tr></thead>
           <tbody>
             {% for p in profiles %}
             {% set profile_base = request.base_url|string ~ (url_prefix[1:] ~ '/' if url_prefix else '') ~ 'pub/p/' ~ p.id %}
-            {% set token_query = '?token=' ~ sub_token %}
+            {% set token_query = '?token=' ~ p.access_token %}
             <tr>
               <td data-label="名称"><strong>{{ p.name }}</strong></td>
               <td data-label="来源">{{ p.source_ids|length }} 个</td>
               <td data-label="更新时间"><span class="mono">{{ p.updated_at|fmt_ts }}</span></td>
+              <td data-label="访问统计">{{ p.access_count or 0 }} 次{% if p.last_access_at %}<div class="hint">最近：{{ p.last_access_at|fmt_ts }}</div>{% endif %}</td>
               <td data-label="订阅链接">
                 <button class="btn primary" type="button" data-copy-text="{{ profile_base }}/clash{{ token_query }}">复制 Clash</button>
                 <details class="inline-details">
@@ -94,16 +120,6 @@
           <h3>订阅源</h3>
           <div class="hint">支持 V2Ray Base64 / Raw / Clash(play)。</div>
         </div>
-        {% if token_enabled %}
-        <span class="badge ok">Token 已启用</span>
-        {% else %}
-        <span class="badge danger">Token 未启用</span>
-        {% endif %}
-        {% if suffix_enabled %}
-        <span class="badge ok">后缀已启用</span>
-        {% else %}
-        <span class="badge warn">后缀未启用</span>
-        {% endif %}
       </div>
 
       {% if sources|length == 0 %}
@@ -191,15 +207,16 @@
         <div class="hint">请调整筛选条件。</div>
       </div>
 
-      <div class="table-wrap" style="margin-top:12px;">
-        <table class="tbl" id="sources-table" aria-label="订阅源列表">
+      <div class="table-wrap sources-table-wrap" style="margin-top:12px;">
+        <table class="tbl sources-table" id="sources-table" aria-label="订阅源列表">
           <thead>
             <tr>
               <th scope="col">名称</th>
               <th scope="col">类型</th>
               <th scope="col">更新时间</th>
-              <th scope="col">最近状态</th>
+              <th scope="col">最近状态 / 健康</th>
               <th scope="col">订阅输出</th>
+              <th scope="col">访问统计</th>
               <th scope="col" class="sticky-col">操作</th>
             </tr>
           </thead>
@@ -207,29 +224,46 @@
             {% for s in sources %}
             {% set sid = s.id %}
             {% set base = request.base_url|string %}
-            {% set u_v2ray = base ~ (url_prefix[1:] ~ '/' if url_prefix else '') ~ 'pub/s/' ~ sid ~ '/v2ray?token=' ~ sub_token %}
-            {% set u_v2ray_raw = base ~ (url_prefix[1:] ~ '/' if url_prefix else '') ~ 'pub/s/' ~ sid ~ '/v2ray_raw?token=' ~ sub_token %}
-            {% set u_clash_play = base ~ (url_prefix[1:] ~ '/' if url_prefix else '') ~ 'pub/s/' ~ sid ~ '/clash?token=' ~ sub_token ~ '&template=play' %}
+            {% set u_v2ray = base ~ (url_prefix[1:] ~ '/' if url_prefix else '') ~ 'pub/s/' ~ sid ~ '/v2ray?token=' ~ s.access_token %}
+            {% set u_v2ray_raw = base ~ (url_prefix[1:] ~ '/' if url_prefix else '') ~ 'pub/s/' ~ sid ~ '/v2ray_raw?token=' ~ s.access_token %}
+            {% set u_clash_play = base ~ (url_prefix[1:] ~ '/' if url_prefix else '') ~ 'pub/s/' ~ sid ~ '/clash?token=' ~ s.access_token ~ '&template=play' %}
             <tr class="source-row" data-name="{{ s.name }}" data-kind="{{ s.kind }}" data-updated="{{ s.updated_at if s.updated_at else 0 }}">
               <td data-label="名称">
-                <div style="font-weight:700;">{{ s.name }}</div>
+                <div class="source-name">{{ s.name }}</div>
               </td>
               <td data-label="类型">
-                <span class="badge">{{ s.kind }}</span>
+                {% if s.kind == 'clash_url' %}
+                <div class="source-kind source-kind--remote"><span class="source-kind-mark">URL</span><span class="source-kind-copy"><strong>Clash 订阅</strong><small>远程订阅地址</small></span></div>
+                {% elif s.kind == 'clash_yaml' %}
+                <div class="source-kind source-kind--yaml"><span class="source-kind-mark">YAML</span><span class="source-kind-copy"><strong>Clash 配置</strong><small>YAML 文件</small></span></div>
+                {% elif s.kind == 'v2ray_text' %}
+                <div class="source-kind source-kind--uri"><span class="source-kind-mark">URI</span><span class="source-kind-copy"><strong>V2Ray 节点</strong><small>URI / Base64</small></span></div>
+                {% else %}
+                <div class="source-kind"><span class="source-kind-mark">SRC</span><span class="source-kind-copy"><strong>{{ s.kind }}</strong><small>订阅来源</small></span></div>
+                {% endif %}
               </td>
               <td data-label="更新时间">
-                <div class="mono">{{ s.updated_at|fmt_ts }}</div>
+                <div class="source-updated">{{ s.updated_at|fmt_ts }}</div>
               </td>
-              <td data-label="最近状态">
-                {% if s.last_status == 'ok' %}<span class="badge ok">正常 · {{ s.last_node_count or 0 }} 节点</span>
-                {% elif s.last_status == 'warning' %}<span class="badge warn">部分节点跳过 · {{ s.last_node_count or 0 }} 节点</span>
-                {% elif s.last_status == 'failed' %}<span class="badge danger">刷新失败</span>
-                {% else %}<span class="badge">未检查</span>{% endif %}
-                {% if s.last_checked_at %}<div class="hint">{{ s.last_checked_at|fmt_ts }}</div>{% endif %}
+              <td data-label="最近状态 / 健康">
+                <div class="source-health">
+                  {% if s.last_status == 'ok' %}<span class="badge ok">正常 <span>{{ s.last_node_count or 0 }} 节点</span></span>
+                  {% elif s.last_status == 'warning' %}<span class="badge warn">部分跳过 <span>{{ s.last_node_count or 0 }} 节点</span></span>
+                  {% elif s.last_status == 'failed' %}<span class="badge danger">刷新失败</span>
+                  {% else %}<span class="badge">未检查</span>{% endif %}
+                  <div class="source-health-meta">
+                    {% if s.last_checked_at %}<div class="hint">检查于 {{ s.last_checked_at|fmt_ts }}</div>{% endif %}
+                    {% if s.traffic_total %}<div class="hint">已用 {{ s.traffic_used|fmt_bytes }} / {{ s.traffic_total|fmt_bytes }} · 剩余 {{ s.traffic_remaining|fmt_bytes }}</div>{% endif %}
+                    {% if s.traffic_expire %}<div class="hint{% if s.traffic_expiring %} health-expiring{% endif %}">到期：{{ s.traffic_expire|fmt_ts }}</div>{% endif %}
+                    {% if s.traffic_reset %}<div class="hint">重置：{{ s.traffic_reset|fmt_reset }}</div>{% endif %}
+                    {% if s.traffic_checked_at %}<div class="hint">流量更新：{{ s.traffic_checked_at|fmt_ts }}</div>{% endif %}
+                  </div>
+                </div>
               </td>
               <td data-label="订阅">
-                <button class="btn primary" type="button" data-copy-text="{{ u_clash_play }}">复制 Clash</button>
-                <details class="inline-details">
+                <div class="source-output">
+                  <button class="btn primary" type="button" data-copy-text="{{ u_clash_play }}">复制 Clash</button>
+                  <details class="inline-details">
                   <summary>其他链接</summary>
                   <div class="link-stack mono">
                     <div class="link-row">
@@ -246,13 +280,15 @@
                     </div>
                     <div class="link-row">
                       <strong>sing-box JSON</strong>
-                      <button class="btn ghost" type="button" data-copy-text="{{ base ~ (url_prefix[1:] ~ '/' if url_prefix else '') ~ 'pub/s/' ~ sid ~ '/singbox?token=' ~ sub_token }}" aria-label="复制 sing-box 订阅链接">复制</button>
+                      <button class="btn ghost" type="button" data-copy-text="{{ base ~ (url_prefix[1:] ~ '/' if url_prefix else '') ~ 'pub/s/' ~ sid ~ '/singbox?token=' ~ s.access_token }}" aria-label="复制 sing-box 订阅链接">复制</button>
                     </div>
                   </div>
-                </details>
+                  </details>
+                </div>
               </td>
+              <td data-label="访问统计"><div class="source-access"><strong>{{ s.access_count or 0 }}</strong><span>次</span></div>{% if s.last_access_at %}<div class="hint source-last-access">最近访问 {{ s.last_access_at|fmt_ts }}</div>{% endif %}</td>
               <td class="sticky-col" data-label="操作">
-                <div class="actions row-actions">
+                <div class="actions row-actions source-actions">
                   <form action="{{ url_prefix }}/sources/{{ sid }}/check" method="post" data-lock-submit>
                     <button class="btn" type="submit" aria-label="检查 {{ s.name }}">检查</button>
                   </form>
@@ -269,6 +305,8 @@
       </div>
       {% endif %}
     </div>
+      </main>
+    </div>
   </div>
 
   <div id="toast" class="toast" role="status" aria-live="polite">
@@ -276,6 +314,6 @@
     <div class="msg"></div>
   </div>
 
-  <script src="{{ url_prefix }}/static/app.js?v=home-tabs-20261108"></script>
+  <script src="{{ url_prefix }}/static/app.js?v=home-sidebar-20261108&theme-picker=2"></script>
 </body>
 </html>

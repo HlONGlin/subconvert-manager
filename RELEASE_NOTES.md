@@ -1,3 +1,19 @@
+# v1.2.0
+
+## Highlights
+
+- Give each source and profile an independent subscription token and record access counts and last access times.
+- Check sources in the background and display upstream traffic, expiry, reset information, and failure alerts.
+- Add ten persistent themes with a visual theme gallery in settings.
+- Adapt the source list to available screen width so its full information remains visible without horizontal scrolling at common desktop sizes.
+
+## Verification
+
+- 89 unit tests pass; one Mihomo integration test is skipped unless `MIHOMO_BINARY` is configured.
+- sing-box 1.12.3 checks pass for Reality, VMess+WS+TLS, Trojan, SS2022, Hysteria2, TUIC, and WireGuard endpoint.
+
+---
+
 # v1.1.1
 
 ## Highlights

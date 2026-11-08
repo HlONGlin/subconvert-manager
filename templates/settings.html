@@ -1,10 +1,11 @@
 <!doctype html>
-<html lang="zh-CN">
+<html lang="zh-CN" data-theme="linear">
 <head>
   <meta charset="utf-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <title>设置 - SubConvert Manager</title>
-  <link rel="stylesheet" href="{{ url_prefix }}/static/style.css"/>
+  <script>(function(){var t="linear";try{t=localStorage.getItem("scm_theme")||t;}catch(e){}if(!/^(linear|vercel|supabase|stripe|notion|raycast|mintlify|warp|sentry|claude)$/.test(t))t="linear";document.documentElement.setAttribute("data-theme",t);}());</script>
+  <link rel="stylesheet" href="{{ url_prefix }}/static/style.css?v=themes-gallery-20261108"/>
 </head>
 <body>
   <div class="wrap">
@@ -18,6 +19,7 @@
         <div class="row"><label for="timeout">超时（秒）</label><input id="timeout" name="timeout" type="number" min="1" max="20" value="{{ settings.TIMEOUT }}" required/></div>
         <div class="row"><label for="max-remote-bytes">最大体积（字节）</label><input id="max-remote-bytes" name="max_remote_bytes" type="number" min="262144" max="10485760" value="{{ settings.MAX_REMOTE_BYTES }}" required/></div>
         <div class="row"><label for="fetch-cache-ttl">缓存 TTL（秒，0 为关闭）</label><input id="fetch-cache-ttl" name="fetch_cache_ttl" type="number" min="0" max="86400" value="{{ settings.FETCH_CACHE_TTL }}" required/></div>
+        <div class="row"><label for="auto-check-interval">自动检查间隔（秒，0 为关闭）</label><input id="auto-check-interval" name="auto_check_interval" type="number" min="0" max="604800" value="{{ settings.AUTO_CHECK_INTERVAL }}" required/></div>
         <div class="row"><label for="data-file">数据文件</label><input id="data-file" name="data_file" value="{{ settings.DATA_FILE }}" required/></div>
       </div>
       <h3>安全</h3>
@@ -54,8 +56,22 @@
       <div class="quick-grid">
         <div class="row"><label for="default-density">默认密度</label><select id="default-density"><option value="cozy">舒适</option><option value="compact">紧凑</option></select></div>
         <div class="row"><label for="default-tab">首页默认区域</label><select id="default-tab"><option value="sources">订阅源</option><option value="profiles">组合订阅</option></select></div>
+        <div class="row"><label for="theme-select">主题</label><select id="theme-select" data-theme-select><option value="linear">Linear</option><option value="vercel">Vercel</option><option value="supabase">Supabase</option><option value="stripe">Stripe</option><option value="notion">Notion</option><option value="raycast">Raycast</option><option value="mintlify">Mintlify</option><option value="warp">Warp</option><option value="sentry">Sentry</option><option value="claude">Claude</option></select></div>
       </div>
       <div class="hint">偏好保存在当前浏览器</div>
+      <div class="theme-gallery" aria-label="主题效果预览">
+        {% for theme, label in [('linear', 'Linear'), ('vercel', 'Vercel'), ('supabase', 'Supabase'), ('stripe', 'Stripe'), ('notion', 'Notion'), ('raycast', 'Raycast'), ('mintlify', 'Mintlify'), ('warp', 'Warp'), ('sentry', 'Sentry'), ('claude', 'Claude')] %}
+        <button class="theme-preview" type="button" data-theme-choice="{{ theme }}" data-theme="{{ theme }}" aria-label="应用 {{ label }} 主题" aria-pressed="false">
+          <span class="theme-preview-heading"><strong>{{ label }}</strong><span class="theme-preview-current">主题预览</span></span>
+          <span class="theme-preview-window">
+            <span class="theme-preview-window-top"><i></i><i></i><i></i></span>
+            <span class="theme-preview-content"><strong>连接状态</strong><span class="theme-preview-status">正常 · 12 节点</span></span>
+            <span class="theme-preview-action">主色按钮</span>
+            <span class="theme-preview-field">输入框预览</span>
+          </span>
+        </button>
+        {% endfor %}
+      </div>
     </section>
   </div>
   <script src="{{ url_prefix }}/static/app.js"></script>

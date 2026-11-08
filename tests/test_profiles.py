@@ -1,7 +1,9 @@
 import json
 import os
 import tempfile
+import time
 import unittest
+from unittest.mock import patch
 
 import yaml
 from fastapi.testclient import TestClient
@@ -13,6 +15,15 @@ from storage import upsert_profile, upsert_source
 
 
 class TestProxyProcessing(unittest.TestCase):
+    def test_subscription_userinfo_parser_reads_expiry_usage_and_reset(self):
+        info = appmod._parse_subscription_userinfo(
+            "upload=1024; download=2048; total=8192; expire=1900000000; reset=15"
+        )
+        self.assertEqual(info, {
+            "upload": 1024, "download": 2048, "total": 8192,
+            "expire": 1900000000, "reset": 15,
+        })
+
     def test_filter_rename_deduplicate_and_order(self):
         nodes = [
             {"name": "HK-2", "type": "ss", "server": "one.example", "port": 443},
@@ -205,10 +216,12 @@ class TestProfileRoutes(unittest.TestCase):
 
     def test_settings_save_updates_runtime_values_and_persists_env(self):
         names = ("CONFIG_ENV_FILE", "TIMEOUT", "DATA_FILE", "SUB_TOKEN", "URL_SUFFIX",
-                 "LOGIN_MAX_FAILS", "LOGIN_LOCK_SECONDS", "MAX_REMOTE_BYTES", "UPDATE_BRANCH", "_FETCH_CACHE_TTL")
+                 "LOGIN_MAX_FAILS", "LOGIN_LOCK_SECONDS", "MAX_REMOTE_BYTES", "UPDATE_BRANCH",
+                 "AUTO_CHECK_INTERVAL", "_FETCH_CACHE_TTL")
         previous = {name: getattr(appmod, name) for name in names}
         env_names = ("PORT", "TIMEOUT", "DATA_FILE", "SUB_TOKEN", "URL_SUFFIX", "LOGIN_MAX_FAILS",
-                     "LOGIN_LOCK_SECONDS", "MAX_REMOTE_BYTES", "FETCH_CACHE_TTL", "UPDATE_BRANCH")
+                     "LOGIN_LOCK_SECONDS", "MAX_REMOTE_BYTES", "FETCH_CACHE_TTL", "UPDATE_BRANCH",
+                     "AUTO_CHECK_INTERVAL")
         old_env = {name: os.environ.get(name) for name in env_names}
         appmod.CONFIG_ENV_FILE = os.path.join(self.temp_dir.name, "settings.env")
         try:
@@ -217,10 +230,12 @@ class TestProfileRoutes(unittest.TestCase):
                 "sub_token": "new-test-token", "url_suffix": "xyz", "login_max_fails": "4",
                 "login_lock_seconds": "1200", "max_remote_bytes": "3145728",
                 "fetch_cache_ttl": "300", "update_branch": "main", "username": appmod.BASIC_USER,
+                "auto_check_interval": "3600",
             }, follow_redirects=False)
             self.assertEqual(response.status_code, 303, response.text)
             self.assertEqual(appmod.TIMEOUT, 12)
             self.assertEqual(appmod.SUB_TOKEN, "new-test-token")
+            self.assertEqual(appmod.AUTO_CHECK_INTERVAL, 3600)
             with open(appmod.CONFIG_ENV_FILE, encoding="utf-8") as saved:
                 self.assertIn("PORT=8123", saved.read())
         finally:
@@ -232,6 +247,99 @@ class TestProfileRoutes(unittest.TestCase):
                 else:
                     os.environ[name] = value
 
+    def test_source_and_profile_tokens_are_independent_and_record_access(self):
+        self.assertEqual(self.client.get("/").status_code, 200)
+        db = appmod._load_db()
+        source = next(item for item in db["sources"] if item["id"] == "source-one")
+        profile = next(item for item in db["profiles"] if item["id"] == "daily")
+        self.assertNotEqual(source["access_token"], profile["access_token"])
+
+        source_response = self.client.get(f"/pub/s/source-one/clash?token={source['access_token']}")
+        self.assertEqual(source_response.status_code, 200, source_response.text)
+        self.assertEqual(self.client.get(f"/pub/p/daily/clash?token={source['access_token']}").status_code, 401)
+        profile_response = self.client.get(f"/pub/p/daily/clash?token={profile['access_token']}")
+        self.assertEqual(profile_response.status_code, 200, profile_response.text)
+
+        updated = appmod._load_db()
+        self.assertEqual(next(item for item in updated["sources"] if item["id"] == "source-one")["access_count"], 1)
+        self.assertEqual(next(item for item in updated["profiles"] if item["id"] == "daily")["access_count"], 1)
+
+    def test_home_hides_token_and_suffix_status_and_rotation_controls(self):
+        response = self.client.get("/")
+        self.assertEqual(response.status_code, 200)
+        self.assertNotIn("每源独立 Token", response.text)
+        self.assertNotIn("后缀未启用", response.text)
+        self.assertNotIn("换 Token", response.text)
+        self.assertEqual(
+            self.client.post("/admin/subscriptions/source/source-one/token/rotate").status_code, 404
+        )
+
+    def test_forced_source_check_refreshes_cache_and_stores_userinfo(self):
+        url = "https://subscription.example/list"
+        db = {"sources": [], "profiles": []}
+        upsert_source(db, {"id": "remote", "name": "Remote", "kind": "clash_url", "value": url})
+        appmod._save_db(db)
+        old_cache = dict(appmod._FETCH_CACHE)
+        appmod._FETCH_CACHE[url] = (time.monotonic() + 600, "proxies: []", "")
+
+        class Response:
+            status_code = 200
+            headers = {"Subscription-Userinfo": "upload=100; download=200; total=1000; expire=1900000000; reset=1"}
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *_):
+                return False
+
+            def iter_content(self, chunk_size):
+                body = (
+                    "proxies:\n"
+                    "  - name: refreshed\n"
+                    "    type: ss\n"
+                    "    server: example.com\n"
+                    "    port: 443\n"
+                    "    cipher: aes-128-gcm\n"
+                    "    password: secret\n"
+                )
+                return iter([body.encode()])
+
+        try:
+            with patch.object(appmod.requests, "get", return_value=Response()) as get:
+                appmod._checked_source_proxies(
+                    next(item for item in appmod._load_db()["sources"] if item["id"] == "remote"),
+                    force=True,
+                )
+            get.assert_called_once()
+            source = next(item for item in appmod._load_db()["sources"] if item["id"] == "remote")
+            self.assertEqual(source["traffic_upload"], 100)
+            self.assertEqual(source["traffic_download"], 200)
+            self.assertEqual(source["traffic_total"], 1000)
+            self.assertEqual(source["traffic_expire"], 1900000000)
+            self.assertEqual(source["traffic_reset"], 1)
+        finally:
+            appmod._FETCH_CACHE.clear()
+            appmod._FETCH_CACHE.update(old_cache)
+
+    def test_scheduled_check_updates_source_health_and_status(self):
+        appmod.run_scheduled_source_checks()
+        source = next(item for item in appmod._load_db()["sources"] if item["id"] == "source-one")
+        self.assertEqual(source["last_status"], "ok")
+        self.assertGreater(source["last_checked_at"], 0)
+
+    def test_home_shows_failure_alert_and_subscription_health(self):
+        appmod._record_source_result(
+            "source-one", True, 1,
+            userinfo="upload=100; download=200; total=1000; expire=1900000000; reset=15",
+        )
+        appmod._record_source_result("source-two", False, force=True)
+        response = self.client.get("/")
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("订阅检查失败", response.text)
+        self.assertIn("到期：", response.text)
+        self.assertIn("已用", response.text)
+        self.assertIn("每月 15 日", response.text)
+
     def test_manual_source_check_records_status(self):
         response = self.client.post("/sources/source-one/check", follow_redirects=False)
         self.assertEqual(response.status_code, 303)
@@ -242,6 +350,11 @@ class TestProfileRoutes(unittest.TestCase):
     def test_management_and_profile_editor_render(self):
         home = self.client.get("/")
         self.assertEqual(home.status_code, 200, home.text)
+        self.assertIn('class="home-sidebar"', home.text)
+        self.assertIn('class="home-sidebar-tools"', home.text)
+        self.assertIn('href="/convert"', home.text)
+        self.assertIn('aria-label="新增订阅"', home.text)
+        self.assertIn('aria-orientation="vertical"', home.text)
         self.assertIn("sing-box JSON", home.text)
         editor = self.client.get("/profiles/daily/edit")
         self.assertEqual(editor.status_code, 200, editor.text)

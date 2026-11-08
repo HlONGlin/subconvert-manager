@@ -198,6 +198,25 @@ def _format_ts(value: object) -> str:
         return "-"
 
 
+def _format_bytes(value: object) -> str:
+    size = float(max(0, _safe_int(value, 0)))
+    for unit in ("B", "KB", "MB", "GB", "TB"):
+        if size < 1024 or unit == "TB":
+            return f"{size:.1f} {unit}" if unit != "B" else f"{int(size)} B"
+        size /= 1024
+    return "0 B"
+
+
+def _format_reset(value: object) -> str:
+    if isinstance(value, int) or (isinstance(value, str) and value.isdigit()):
+        number = int(value)
+        if number >= 1_000_000_000:
+            return _format_ts(number)
+        if 1 <= number <= 31:
+            return f"每月 {number} 日"
+    return str(value or "未提供")
+
+
 def _url_suffix_value() -> str:
     return (URL_SUFFIX or "").strip().strip("/")
 
@@ -262,6 +281,8 @@ app.add_middleware(
 app.mount("/static", StaticFiles(directory="static"), name="static")
 templates = Jinja2Templates(directory="templates")
 templates.env.filters["fmt_ts"] = _format_ts
+templates.env.filters["fmt_bytes"] = _format_bytes
+templates.env.filters["fmt_reset"] = _format_reset
 security = HTTPBasic()
 
 
@@ -282,20 +303,24 @@ async def suffix_path_middleware(request: Request, call_next):
 
     return _render_http_error(request, 404, "当前已启用 URL_SUFFIX，请使用带安全后缀的完整地址访问。")
 
-_FETCH_CACHE: Dict[str, Tuple[float, str]] = {}
+_FETCH_CACHE: Dict[str, Tuple[float, str, str]] = {}
 _FETCH_CACHE_LOCK = threading.Lock()
 _FETCH_CACHE_TTL = max(0.0, _safe_float(os.environ.get("FETCH_CACHE_TTL", "300"), 300.0))
 _FETCH_CACHE_MAX = _clamp(_safe_int(os.environ.get("FETCH_CACHE_MAX", "256"), 256), 16, 4096)
+AUTO_CHECK_INTERVAL = _clamp(_safe_int(os.environ.get("AUTO_CHECK_INTERVAL", "21600"), 21600), 0, 604800)
 _SOURCE_STATUS_LOCK = threading.Lock()
 _SOURCE_STATUS_CACHE: Dict[str, Tuple[str, int, float]] = {}
 _LOGIN_FAIL_STATE: Dict[str, Tuple[int, float]] = {}
 _LOGIN_FAIL_LOCK = threading.Lock()
+_ACCESS_STATS_LOCK = threading.Lock()
+_AUTO_CHECK_STOP = threading.Event()
+_AUTO_CHECK_THREAD: Optional[threading.Thread] = None
 
 
 def _prune_fetch_cache(now: Optional[float] = None) -> None:
     ts = time.monotonic() if now is None else now
 
-    expired = [k for k, (exp, _) in _FETCH_CACHE.items() if exp <= ts]
+    expired = [k for k, (exp, _, _) in _FETCH_CACHE.items() if exp <= ts]
     for k in expired:
         _FETCH_CACHE.pop(k, None)
 
@@ -417,6 +442,47 @@ def require_sub_token(token: Optional[str]) -> bool:
     return True
 
 
+def _resource_collection(db: dict, kind: str) -> List[dict]:
+    return list_sources(db) if kind == "source" else list_profiles(db)
+
+
+def _find_subscription(db: dict, kind: str, resource_id: str) -> Optional[dict]:
+    return next((item for item in _resource_collection(db, kind)
+                 if str(item.get("id") or "") == resource_id), None)
+
+
+def _ensure_resource_tokens(db: dict) -> bool:
+    with _ACCESS_STATS_LOCK:
+        changed = False
+        for kind in ("source", "profile"):
+            for item in _resource_collection(db, kind):
+                if not item.get("access_token"):
+                    item["access_token"] = secrets.token_urlsafe(32)
+                    item.setdefault("access_count", 0)
+                    changed = True
+        if changed:
+            _save_db(db)
+        return changed
+
+
+def require_resource_token(token: Optional[str], kind: str, resource_id: str) -> bool:
+    item = _find_subscription(_load_db(), kind, resource_id)
+    if item and item.get("access_token"):
+        candidate = _normalize_token(token)
+        if not candidate or not secrets.compare_digest(candidate, str(item["access_token"])):
+            raise HTTPException(status_code=401, detail="Invalid subscription token")
+    else:
+        require_sub_token(token)
+    with _ACCESS_STATS_LOCK:
+        db = _load_db()
+        current = _find_subscription(db, kind, resource_id)
+        if current:
+            current["access_count"] = _safe_int(current.get("access_count"), 0) + 1
+            current["last_access_at"] = int(time.time())
+            _save_db(db)
+    return True
+
+
 def require_url_suffix(suffix: Optional[str]) -> bool:
     expected = (URL_SUFFIX or "").strip()
     if not expected:
@@ -483,18 +549,40 @@ def _git_error_message(proc: subprocess.CompletedProcess) -> str:
     return msg.splitlines()[0][:180]
 
 
-def _fetch_text(url: str) -> str:
+def _parse_subscription_userinfo(value: str) -> Dict[str, object]:
+    fields: Dict[str, str] = {}
+    for part in (value or "").split(";"):
+        if "=" not in part:
+            continue
+        key, raw = part.split("=", 1)
+        fields[key.strip().lower()] = raw.strip()
+    result: Dict[str, object] = {}
+    for key in ("upload", "download", "total", "expire"):
+        if fields.get(key, "").isdigit():
+            result[key] = int(fields[key])
+    reset = fields.get("reset") or fields.get("reset_at") or fields.get("reset_day")
+    if reset:
+        result["reset"] = int(reset) if reset.isdigit() else reset
+    return result
+
+
+def _fetch_text(
+    url: str, metadata: Optional[Dict[str, str]] = None, force_refresh: bool = False
+) -> str:
     url = (url or "").strip()
     parsed = urlparse(url)
     if parsed.scheme not in ("http", "https") or not parsed.netloc:
         raise HTTPException(status_code=400, detail="Invalid URL")
 
     now = time.monotonic()
-    with _FETCH_CACHE_LOCK:
-        _prune_fetch_cache(now)
-        cached = _FETCH_CACHE.get(url)
-        if cached and cached[0] > now:
-            return cached[1]
+    if not force_refresh:
+        with _FETCH_CACHE_LOCK:
+            _prune_fetch_cache(now)
+            cached = _FETCH_CACHE.get(url)
+            if cached and cached[0] > now:
+                if metadata is not None:
+                    metadata["subscription_userinfo"] = cached[2]
+                return cached[1]
 
     try:
         with requests.get(
@@ -506,6 +594,9 @@ def _fetch_text(url: str) -> str:
         ) as r:
             if r.status_code != 200:
                 raise HTTPException(status_code=502, detail=f"Remote returned HTTP {r.status_code}")
+            userinfo = r.headers.get("Subscription-Userinfo", "")
+            if metadata is not None:
+                metadata["subscription_userinfo"] = userinfo
 
             buf = bytearray()
             for chunk in r.iter_content(chunk_size=8192):
@@ -518,7 +609,7 @@ def _fetch_text(url: str) -> str:
             text = buf.decode("utf-8", errors="ignore")
             if _FETCH_CACHE_TTL > 0:
                 with _FETCH_CACHE_LOCK:
-                    _FETCH_CACHE[url] = (time.monotonic() + _FETCH_CACHE_TTL, text)
+                    _FETCH_CACHE[url] = (time.monotonic() + _FETCH_CACHE_TTL, text, userinfo)
                     _prune_fetch_cache()
             return text
     except HTTPException:
@@ -572,11 +663,14 @@ def _detect_source_kind(value: str, has_file: bool = False) -> str:
     )
 
 
-def _source_proxies(src: dict, issues: Optional[List[dict]] = None) -> List[dict]:
+def _source_proxies(
+    src: dict, issues: Optional[List[dict]] = None, metadata: Optional[Dict[str, str]] = None,
+    force_refresh: bool = False,
+) -> List[dict]:
     kind = (src or {}).get("kind")
     value = str((src or {}).get("value") or "")
     if kind == "clash_url":
-        value = _fetch_text(value)
+        value = _fetch_text(value, metadata, force_refresh=force_refresh)
     if kind in ("clash_url", "clash_yaml"):
         return list(_parse_clash_yaml_text(value).get("proxies") or [])
     if kind == "v2ray_text":
@@ -648,13 +742,14 @@ def _record_source_result(
     node_count: int = 0,
     partial: bool = False,
     force: bool = False,
+    userinfo: str = "",
 ) -> None:
     status = "warning" if ok and partial else "ok" if ok else "failed"
     checked_at = int(time.time())
     now = time.monotonic()
     with _SOURCE_STATUS_LOCK:
         cached = _SOURCE_STATUS_CACHE.get(sid)
-        if not force and cached and cached[:2] == (status, node_count) and now - cached[2] < 60:
+        if not force and not userinfo and cached and cached[:2] == (status, node_count) and now - cached[2] < 60:
             return
         db = _load_db()
         current = get_source(db, sid) or {}
@@ -664,6 +759,7 @@ def _record_source_result(
             and current.get("last_status") == status
             and _safe_int(current.get("last_node_count"), 0) == node_count
             and checked_at - last_checked < 60
+            and not userinfo
         ):
             _SOURCE_STATUS_CACHE[sid] = (status, node_count, now)
             return
@@ -674,23 +770,70 @@ def _record_source_result(
             "last_node_count": node_count,
             "last_error": "部分节点无法转换" if partial else "" if ok else "订阅获取或解析失败",
         }
+        health = _parse_subscription_userinfo(userinfo)
+        if health:
+            fields.update({
+                "traffic_upload": health.get("upload", current.get("traffic_upload", 0)),
+                "traffic_download": health.get("download", current.get("traffic_download", 0)),
+                "traffic_total": health.get("total", current.get("traffic_total", 0)),
+                "traffic_expire": health.get("expire", current.get("traffic_expire", 0)),
+                "traffic_reset": health.get("reset", current.get("traffic_reset", "")),
+                "traffic_checked_at": checked_at,
+            })
         if update_source_fields(db, sid, fields):
             _save_db(db)
             _SOURCE_STATUS_CACHE[sid] = (status, node_count, now)
 
 
-def _checked_source_proxies(src: dict, issues: Optional[List[dict]] = None) -> List[dict]:
+def _checked_source_proxies(
+    src: dict, issues: Optional[List[dict]] = None, force: bool = False
+) -> List[dict]:
     sid = str((src or {}).get("id") or "")
+    metadata: Dict[str, str] = {}
     try:
-        nodes = _source_proxies(src, issues)
+        nodes = _source_proxies(src, issues, metadata, force_refresh=force)
         if sid:
             has_errors = bool(issues and any(item.get("severity") == "error" for item in issues))
-            _record_source_result(sid, bool(nodes), len(nodes), partial=bool(nodes) and has_errors)
+            _record_source_result(sid, bool(nodes), len(nodes), partial=bool(nodes) and has_errors,
+                                  force=force, userinfo=metadata.get("subscription_userinfo", ""))
         return nodes
     except Exception:
         if sid:
-            _record_source_result(sid, False)
+            _record_source_result(sid, False, force=force, userinfo=metadata.get("subscription_userinfo", ""))
         raise
+
+
+def run_scheduled_source_checks() -> None:
+    for src in list_sources(_load_db()):
+        issues: List[dict] = []
+        try:
+            _checked_source_proxies(src, issues, force=True)
+        except Exception:
+            logger.exception("Scheduled subscription check failed for %s", src.get("id"))
+
+
+def _auto_check_worker() -> None:
+    last_check = time.monotonic()
+    while not _AUTO_CHECK_STOP.wait(1):
+        interval = AUTO_CHECK_INTERVAL
+        if interval > 0 and time.monotonic() - last_check >= interval:
+            run_scheduled_source_checks()
+            last_check = time.monotonic()
+
+
+@app.on_event("startup")
+def start_auto_check_worker() -> None:
+    global _AUTO_CHECK_THREAD
+    if _AUTO_CHECK_THREAD and _AUTO_CHECK_THREAD.is_alive():
+        return
+    _AUTO_CHECK_STOP.clear()
+    _AUTO_CHECK_THREAD = threading.Thread(target=_auto_check_worker, name="subscription-checker", daemon=True)
+    _AUTO_CHECK_THREAD.start()
+
+
+@app.on_event("shutdown")
+def stop_auto_check_worker() -> None:
+    _AUTO_CHECK_STOP.set()
 
 
 def _profile_response(profile: dict, fmt: str, issues: List[dict], mode: str = "") -> PlainTextResponse:
@@ -963,6 +1106,7 @@ def admin_settings(request: Request, _=Depends(require_admin_auth)):
         "SUB_TOKEN": SUB_TOKEN, "URL_SUFFIX": URL_SUFFIX, "LOGIN_MAX_FAILS": LOGIN_MAX_FAILS,
         "LOGIN_LOCK_SECONDS": LOGIN_LOCK_SECONDS, "MAX_REMOTE_BYTES": MAX_REMOTE_BYTES,
         "FETCH_CACHE_TTL": int(_FETCH_CACHE_TTL), "UPDATE_BRANCH": UPDATE_BRANCH,
+        "AUTO_CHECK_INTERVAL": AUTO_CHECK_INTERVAL,
         "BASIC_AUTH_USER": BASIC_USER,
     }))
 
@@ -973,21 +1117,25 @@ def save_admin_settings(
     sub_token: str = Form(""), url_suffix: str = Form(""), login_max_fails: str = Form("3"),
     login_lock_seconds: str = Form("900"), max_remote_bytes: str = Form("2097152"),
     fetch_cache_ttl: str = Form("300"), update_branch: str = Form("main"),
+    auto_check_interval: str = Form("21600"),
     username: str = Form(""), password: str = Form(""), confirm_password: str = Form(""),
     _=Depends(require_admin_auth),
 ):
     global TIMEOUT, DATA_FILE, SUB_TOKEN, URL_SUFFIX, LOGIN_MAX_FAILS, LOGIN_LOCK_SECONDS
-    global MAX_REMOTE_BYTES, UPDATE_BRANCH, _FETCH_CACHE_TTL
+    global MAX_REMOTE_BYTES, UPDATE_BRANCH, _FETCH_CACHE_TTL, AUTO_CHECK_INTERVAL
     port = port.strip()
     timeout_value, fails_value = _safe_int(timeout, -1), _safe_int(login_max_fails, -1)
     lock_value, bytes_value = _safe_int(login_lock_seconds, -1), _safe_int(max_remote_bytes, -1)
     cache_value = _safe_int(fetch_cache_ttl, -1)
+    auto_check_value = _safe_int(auto_check_interval, -1)
     if (port and not (port.isdigit() and 1 <= int(port) <= 65535)) or not 1 <= timeout_value <= 20:
         raise HTTPException(status_code=400, detail="Invalid port or timeout")
     if not 1 <= fails_value <= 10 or not 60 <= lock_value <= 86400:
         raise HTTPException(status_code=400, detail="Invalid login lock settings")
     if not 262144 <= bytes_value <= 10 * 1024 * 1024 or not 0 <= cache_value <= 86400:
         raise HTTPException(status_code=400, detail="Invalid size limit or cache TTL")
+    if not 0 <= auto_check_value <= 604800:
+        raise HTTPException(status_code=400, detail="Invalid automatic check interval")
     if not data_file.strip():
         raise HTTPException(status_code=400, detail="DATA_FILE is required")
     username = username.strip()
@@ -1001,6 +1149,7 @@ def save_admin_settings(
         "LOGIN_MAX_FAILS": str(fails_value), "LOGIN_LOCK_SECONDS": str(lock_value),
         "MAX_REMOTE_BYTES": str(bytes_value), "FETCH_CACHE_TTL": str(cache_value),
         "UPDATE_BRANCH": update_branch.strip() or "main",
+        "AUTO_CHECK_INTERVAL": str(auto_check_value),
     }
     if password:
         values.update({"BASIC_AUTH_USER": username, "BASIC_AUTH_PASS": password})
@@ -1011,6 +1160,7 @@ def save_admin_settings(
     URL_SUFFIX = values["URL_SUFFIX"]
     LOGIN_MAX_FAILS, LOGIN_LOCK_SECONDS = fails_value, lock_value
     MAX_REMOTE_BYTES, UPDATE_BRANCH, _FETCH_CACHE_TTL = bytes_value, values["UPDATE_BRANCH"], float(cache_value)
+    AUTO_CHECK_INTERVAL = auto_check_value
     if password:
         _set_admin_credentials(username, password)
     with _FETCH_CACHE_LOCK:
@@ -1048,9 +1198,17 @@ async def import_backup(file: UploadFile = File(...), _=Depends(require_admin_au
 @app.get("/", response_class=HTMLResponse)
 def home(request: Request, _=Depends(require_admin_auth)):
     db = _load_db()
+    _ensure_resource_tokens(db)
     sources = list_sources(db)
     sources = sorted(sources, key=lambda s: _safe_int((s or {}).get("updated_at"), 0), reverse=True)
     profiles = sorted(list_profiles(db), key=lambda s: _safe_int((s or {}).get("updated_at"), 0), reverse=True)
+    current_time = int(time.time())
+    for source in sources:
+        source["traffic_used"] = _safe_int(source.get("traffic_upload"), 0) + _safe_int(source.get("traffic_download"), 0)
+        total = _safe_int(source.get("traffic_total"), 0)
+        source["traffic_remaining"] = max(0, total - source["traffic_used"]) if total else 0
+        expire = _safe_int(source.get("traffic_expire"), 0)
+        source["traffic_expiring"] = bool(expire and current_time < expire <= current_time + 7 * 86400)
     return templates.TemplateResponse(
         "home.html",
         _template_context(
@@ -1059,12 +1217,12 @@ def home(request: Request, _=Depends(require_admin_auth)):
             profiles=profiles,
             sub_token=SUB_TOKEN,
             url_suffix=URL_SUFFIX,
-            suffix_enabled=bool(URL_SUFFIX),
-            token_enabled=bool(SUB_TOKEN),
             source_count=len(sources),
             failed_source_count=sum(1 for source in sources if source.get("last_status") == "failed"),
+            failed_sources=[source for source in sources if source.get("last_status") == "failed"],
             profile_count=len(profiles),
             node_count=sum(_safe_int(source.get("last_node_count"), 0) for source in sources),
+            now_ts=current_time,
             version=_app_version(),
         ),
     )
@@ -1185,6 +1343,9 @@ def profile_save(
         "clash_template": clash_template,
         "custom_template": custom,
         "rate_limit_mbps": rate,
+        "access_token": profile.get("access_token") or secrets.token_urlsafe(32),
+        "access_count": _safe_int(profile.get("access_count"), 0),
+        "last_access_at": _safe_int(profile.get("last_access_at"), 0),
     }
     upsert_profile(db, profile)
     _save_db(db)
@@ -1355,6 +1516,7 @@ async def source_save(
             "value": value,
             "clash_template": clash_template,
             "rate_limit_mbps": rate_limit,
+            "access_token": (get_source(db, sid) or {}).get("access_token") or secrets.token_urlsafe(32),
         },
     )
     _save_db(db)
@@ -1379,15 +1541,12 @@ def source_check(sid: str, _=Depends(require_admin_auth)):
     src = _source_or_404(sid)
     issues: List[dict] = []
     try:
-        nodes = _checked_source_proxies(src, issues)
-        partial = any(item.get("severity") == "error" for item in issues)
-        _record_source_result(sid, bool(nodes), len(nodes), partial=bool(nodes) and partial, force=True)
+        nodes = _checked_source_proxies(src, issues, force=True)
         if not nodes:
             message = "订阅检查失败：没有可用节点"
         else:
             message = f"订阅检查成功：{len(nodes)} 个节点"
     except HTTPException:
-        _record_source_result(sid, False, force=True)
         message = "订阅检查失败，请检查来源地址和内容"
     return RedirectResponse(url=_with_url_prefix("/?toast=" + quote(message)), status_code=303)
 
@@ -1489,7 +1648,7 @@ def sub_singbox(sid: str, mode: str = "", _=Depends(require_admin_auth)):
 
 @app.get("/pub/s/{sid}/v2ray", response_class=PlainTextResponse)
 def pub_v2ray_b64(sid: str, token: str = ""):
-    require_sub_token(token)
+    require_resource_token(token, "source", sid)
     issues: List[dict] = []
     src = _source_or_404(sid)
     nodes = _checked_source_proxies(src, issues)
@@ -1501,7 +1660,7 @@ def pub_v2ray_b64(sid: str, token: str = ""):
 
 @app.get("/pub/s/{sid}/v2ray_raw", response_class=PlainTextResponse)
 def pub_v2ray_raw(sid: str, token: str = ""):
-    require_sub_token(token)
+    require_resource_token(token, "source", sid)
     issues: List[dict] = []
     src = _source_or_404(sid)
     nodes = _checked_source_proxies(src, issues)
@@ -1513,7 +1672,7 @@ def pub_v2ray_raw(sid: str, token: str = ""):
 
 @app.get("/pub/s/{sid}/clash", response_class=PlainTextResponse)
 def pub_clash(sid: str, token: str = "", template: str = ""):
-    require_sub_token(token)
+    require_resource_token(token, "source", sid)
     issues: List[dict] = []
     src = _source_or_404(sid)
     nodes = _checked_source_proxies(src, issues)
@@ -1527,7 +1686,7 @@ def pub_clash(sid: str, token: str = "", template: str = ""):
 
 @app.get("/pub/s/{sid}/singbox")
 def pub_singbox(sid: str, token: str = "", mode: str = ""):
-    require_sub_token(token)
+    require_resource_token(token, "source", sid)
     issues: List[dict] = []
     nodes = _checked_source_proxies(_source_or_404(sid), issues)
     return _singbox_response(nodes, issues, mode)
@@ -1555,7 +1714,7 @@ def profile_singbox(pid: str, mode: str = "", _=Depends(require_admin_auth)):
 
 @app.get("/pub/p/{pid}/{fmt}", response_class=PlainTextResponse)
 def pub_profile(pid: str, fmt: str, token: str = "", mode: str = ""):
-    require_sub_token(token)
+    require_resource_token(token, "profile", pid)
     if fmt not in ("clash", "v2ray", "v2ray_raw", "singbox"):
         raise HTTPException(status_code=404, detail="Unsupported profile output")
     return _profile_response(_profile_or_404(pid), fmt, [], mode)

@@ -72,7 +72,7 @@ class TestSourceAutodetection(unittest.TestCase):
         self.assertIn('data-home-tab="sources">订阅源</button>', home.text)
         self.assertIn('aria-controls="panel-profiles" aria-selected="false" tabindex="-1" data-home-tab="profiles">', home.text)
         self.assertIn('data-state-region="profiles" hidden', home.text)
-        self.assertIn("/static/app.js?v=home-tabs-20261108", home.text)
+        self.assertIn("/static/app.js?v=home-sidebar-20261108", home.text)
 
 
 if __name__ == "__main__":

@@ -75,7 +75,11 @@ def upsert_source(data: Dict[str, Any], src: Dict[str, Any]) -> None:
     xs = list_sources(data)
     for i, s in enumerate(xs):
         if str(s.get("id") or "").strip() == sid:
-            for key in ("last_checked_at", "last_success_at", "last_status", "last_node_count", "last_error"):
+            for key in (
+                "last_checked_at", "last_success_at", "last_status", "last_node_count", "last_error",
+                "access_token", "access_count", "last_access_at", "traffic_upload", "traffic_download",
+                "traffic_total", "traffic_expire", "traffic_reset", "traffic_checked_at",
+            ):
                 if key in s:
                     src[key] = s[key]
             xs[i] = src
@@ -121,6 +125,9 @@ def upsert_profile(data: Dict[str, Any], profile: Dict[str, Any]) -> None:
     profiles = list_profiles(data)
     for index, current in enumerate(profiles):
         if str(current.get("id") or "").strip() == pid:
+            for key in ("access_token", "access_count", "last_access_at"):
+                if key in current:
+                    item[key] = current[key]
             profiles[index] = item
             break
     else:
