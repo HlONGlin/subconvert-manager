@@ -66,13 +66,24 @@ class TestSourceAutodetection(unittest.TestCase):
 
         home = self.client.get("/")
         self.assertEqual(home.status_code, 200, home.text)
+        # 侧栏只保留一个「新增订阅」菜单，且该菜单同时提供两种新增入口。
         self.assertEqual(home.text.count('class="add-subscription-menu"'), 1)
-        self.assertEqual(home.text.count("/sources/new"), 1)
-        self.assertEqual(home.text.count("/profiles/new"), 1)
-        self.assertIn('data-home-tab="sources">订阅源</button>', home.text)
-        self.assertIn('aria-controls="panel-profiles" aria-selected="false" tabindex="-1" data-home-tab="profiles">', home.text)
+        self.assertEqual(home.text.count('class="add-menu-panel"'), 1)
+        menu = home.text.split('class="add-menu-panel"', 1)[1].split("</div>", 1)[0]
+        self.assertIn("/sources/new", menu)
+        self.assertIn("/profiles/new", menu)
+        # 首页其他位置（卡片头、空状态）允许再露出新增入口，但不能出现第二个菜单。
+        self.assertGreaterEqual(home.text.count("/sources/new"), 1)
+        self.assertGreaterEqual(home.text.count("/profiles/new"), 1)
+        self.assertEqual(home.text.count('data-home-tab="sources"'), 1)
+        self.assertEqual(home.text.count('data-home-tab="profiles"'), 1)
+        self.assertIn('role="tablist"', home.text)
+        self.assertIn('aria-orientation="vertical"', home.text)
+        self.assertIn('aria-controls="panel-profiles"', home.text)
+        self.assertIn('aria-controls="panel-sources"', home.text)
         self.assertIn('data-state-region="profiles" hidden', home.text)
-        self.assertIn("/static/app.js?v=home-sidebar-20261108", home.text)
+        self.assertIn("/static/app.js?v=", home.text)
+        self.assertIn("/static/style.css?v=", home.text)
 
 
 if __name__ == "__main__":

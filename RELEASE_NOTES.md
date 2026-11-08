@@ -1,3 +1,24 @@
+# v1.3.0
+
+## Highlights
+
+- Rebuild the whole UI: responsive source cards with status bars, traffic meters, status dots, and a dashboard summary row; no horizontal scrolling on phones.
+- Turn subscription copying into format-labelled button groups; the button flips to "已复制 ✓" and the toast names the copied format.
+- Add three source list layouts (list / card / compact) that are remembered per browser.
+- Redesign the sidebar with inline SVG icons, clearer active state, quick-action group, and version info.
+- Unify all form pages into grouped sections with validation styling, empty states, skeleton loading, focus rings, and reduced-motion support.
+- Give every one of the ten themes text-safe ink tokens so all themes meet WCAG AA contrast, and switch to a system font stack with a clearer type scale.
+- Add a site icon and consistent asset versioning across all nine pages.
+- Add `one-click.sh`: interactive menu, guided admin account setup on first install, and `--update-only` for online updates; `quick-install.sh` becomes a compatibility shim.
+- Fix popover menus that stayed open when clicking outside.
+
+## Verification
+
+- 89 unit tests pass; the sing-box integration tests are skipped unless `SINGBOX_BINARY` is configured.
+- Playwright checks across 10 themes at 1440/1024/768/390 px: no horizontal overflow, no overlapping cells, no clipped text, WCAG AA contrast, and working copy / tab / theme / density / drawer interactions.
+
+---
+
 # v1.2.0
 
 ## Highlights

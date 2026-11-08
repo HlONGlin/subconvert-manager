@@ -1,28 +1,36 @@
 <!doctype html>
-<html lang="zh-CN">
+<html lang="zh-CN" data-theme="linear">
 <head>
   <meta charset="utf-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <title>Initial Setup - SubConvert Manager</title>
-  <link rel="stylesheet" href="{{ url_prefix }}/static/style.css"/>
+  <script>(function(){var t="linear";try{t=localStorage.getItem("scm_theme")||t;}catch(e){}if(!/^(linear|vercel|supabase|stripe|notion|raycast|mintlify|warp|sentry|claude)$/.test(t))t="linear";document.documentElement.setAttribute("data-theme",t);}());</script>
+  <link rel="icon" type="image/svg+xml" href="{{ url_prefix }}/static/favicon.svg?v=ui-20261108b"/>
+  <link rel="stylesheet" href="{{ url_prefix }}/static/style.css?v=ui-20261108b"/>
 </head>
 <body>
-  <div class="wrap">
-    <div class="card" style="max-width:560px;margin:8vh auto 0;">
-      <div class="brand">
-        <h1 style="font-size:24px;">首次初始化</h1>
+  <div class="auth-shell">
+    <div class="auth-card">
+      <div class="auth-head">
+        <span class="brand-mark" aria-hidden="true">
+          <svg viewBox="0 0 24 24"><path d="m12 3 8 4.5-8 4.5-8-4.5L12 3Z"/><path d="m4 12 8 4.5 8-4.5"/><path d="m4 16.5 8 4.5 8-4.5"/></svg>
+        </span>
+        <h1>首次初始化</h1>
         <div class="sub">请先设置管理员账号和密码，完成后才能使用管理功能。</div>
       </div>
 
       {% if error %}
-      <div class="state-block error" style="margin-top:12px;">
-        <div class="state-title">初始化失败</div>
-        <div class="hint">{{ error }}</div>
+      <div class="notice error" role="alert">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.2 2.4 20.4h19.2L12 3.2Z"/><path d="M12 9.4v4.6"/><circle cx="12" cy="17.2" r=".8"/></svg>
+        <div class="notice-body">
+          <div class="notice-title">初始化失败</div>
+          <div>{{ error }}</div>
+        </div>
       </div>
       {% endif %}
 
-      <form method="post" action="{{ url_prefix }}/setup" data-lock-submit style="margin-top:14px;display:grid;gap:12px;">
-        <div>
+      <form class="auth-form" method="post" action="{{ url_prefix }}/setup" data-lock-submit>
+        <div class="field">
           <label for="setup-user">管理员账号</label>
           <input
             id="setup-user"
@@ -34,9 +42,10 @@
             maxlength="64"
             aria-label="管理员账号"
           />
+          <div class="hint">3–64 个字符，请勿使用默认账号 admin。</div>
         </div>
 
-        <div>
+        <div class="field">
           <label for="setup-pass">管理员密码</label>
           <input
             id="setup-pass"
@@ -48,9 +57,10 @@
             maxlength="128"
             aria-label="管理员密码"
           />
+          <div class="hint">至少 8 位，建议混合大小写、数字与符号。</div>
         </div>
 
-        <div>
+        <div class="field">
           <label for="setup-pass2">确认密码</label>
           <input
             id="setup-pass2"
@@ -64,14 +74,14 @@
           />
         </div>
 
-        <div class="actions" style="margin-top:6px;">
+        <div class="actions">
           <button class="btn primary" type="submit">保存并进入控制台</button>
         </div>
-
-        <div class="hint">
-          建议使用强密码。保存后会写入 <span class="mono">config.env</span> 并立即生效。
-        </div>
       </form>
+
+      <div class="auth-foot">
+        保存后会写入 <span class="mono">config.env</span> 并立即生效。
+      </div>
     </div>
   </div>
 
@@ -80,6 +90,6 @@
     <div class="msg"></div>
   </div>
 
-  <script src="{{ url_prefix }}/static/app.js"></script>
+  <script src="{{ url_prefix }}/static/app.js?v=ui-20261108b"></script>
 </body>
 </html>

@@ -12,8 +12,8 @@
 
 - [功能概览](#功能概览)
 - [协议支持](#协议支持)
-- [快速部署](#快速部署)
-  - [一键部署（curl）](#一键部署curl)
+- [一键部署（推荐）](#一键部署推荐)
+  - [常用参数](#常用参数)
   - [手动部署（git clone）](#手动部署git-clone)
   - [Windows 部署](#windows-部署)
 - [常用管理命令](#常用管理命令)
@@ -107,36 +107,92 @@ python -m unittest discover -s tests -v
 
 ---
 
-## 快速部署
+## 一键部署（推荐）
 
-### 一键部署（curl）
-
-适合全新服务器，脚本会自动拉取仓库、安装依赖并注册系统服务。
+适用于支持 `systemd` / `openrc` / `sysv init` 的 Linux 服务器。脚本会自动检查运行环境、安装 Python 依赖、创建虚拟环境、写入配置、注册系统服务，并在首次安装时引导你设置管理员账号。
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/HlONGlin/subconvert-manager/main/control.sh | sudo bash
+bash <(curl -fsSL https://github.com/HlONGlin/subconvert-manager/raw/main/one-click.sh)
 ```
 
-> 没有 `curl`？用 `wget -O - <url> | sudo bash` 替代。
+> 没有 `curl` 时，可用 `wget -qO- <同一地址> | sudo bash`；已经 clone 过仓库的，直接 `sudo bash one-click.sh` 即可。
 
-运行后进入交互菜单，选择 **`1) 部署环境`** 即可。脚本会：
+脚本会进入交互式管理菜单：
 
-1. 将完整仓库克隆到 `/opt/subconvert-manager`
-2. 自动安装 Python 依赖（virtualenv）
-3. 注册并启动系统服务
-4. 打印访问地址与初始化链接
+| 选项 | 操作 |
+| --- | --- |
+| `1` | 安装或更新 |
+| `2` | 卸载服务并删除全部下载内容 |
+| `3` | 重启服务 |
+| `4` | 停止服务 |
+| `5` | 查看服务状态与访问地址 |
+| `6` | 修改自定义端口 |
+| `7` | 仅显示访问地址 |
+| `8` | 从 GitHub 更新网站版本 |
+| `9` | 设置网址后缀安全（`URL_SUFFIX`） |
+| `0` | 退出菜单 |
 
-**自定义目标目录：**
+首次安装时会提示设置管理员账号密码；直接回车则自动生成随机账号与密码。安装完成后会打印完整访问信息，请妥善保存：
+
+```text
+访问地址：http://服务器IP:8000
+管理员账号：安装时设置（或自动生成）
+管理员密码：仅在安装时显示一次
+```
+
+如果跳过了账号设置，打开访问地址后会在 `/setup` 页面引导完成初始化。
+
+脚本默认使用以下路径：
+
+| 内容 | 路径 |
+| --- | --- |
+| 程序目录 | `/opt/subconvert-manager` |
+| 配置文件 | `/opt/subconvert-manager/config.env` |
+| 订阅数据 | `/opt/subconvert-manager/data/sources.json` |
+| systemd 服务 | `subconvert-manager.service` |
+
+> 卸载（菜单 `2`）会删除程序目录、`data/` 订阅数据与配置文件，需要二次确认；修改端口和设置 `URL_SUFFIX` 不会影响已有数据。
+
+### 常用参数
+
+脚本源码位于仓库根目录：[one-click.sh](./one-click.sh)。除交互菜单外，也支持直接带参数执行：
+
+| 参数 | 说明 |
+| --- | --- |
+| `--install` | 安装或更新后直接退出，不进入菜单 |
+| `--update-only` | 仅同步代码、重装依赖并重启服务（在线更新使用） |
+| `--port <端口>` | 指定监听端口；`auto` 表示自动挑选空闲端口 |
+| `--suffix <后缀>` | 设置 `URL_SUFFIX`（3-5 位字母/数字/`_`/`-`） |
+| `--branch <分支>` | 指定分支，默认 `main` |
+| `--dir <目录>` | 指定安装目录，默认 `/opt/subconvert-manager` |
+| `--yes` | 非交互模式，所有提问使用默认值 |
+| `--no-menu` | 等价于 `--install` |
+| `--no-setup-prompt` | 首次安装时不询问管理员账号密码 |
+| `-h, --help` | 显示帮助 |
+| `-V, --version` | 显示版本号 |
+
+**自动化安装：**
 
 ```bash
-curl -fsSL .../control.sh | sudo env BOOTSTRAP_DIR=/data/subconvert-manager bash
+curl -fsSL https://github.com/HlONGlin/subconvert-manager/raw/main/one-click.sh -o one-click.sh
+sudo bash one-click.sh --install --yes --port 8000
 ```
 
 **指定分支或私有仓库：**
 
 ```bash
-curl -fsSL .../control.sh | sudo env REPO_URL=https://github.com/你的账号/仓库.git BRANCH=main bash
+sudo env REPO_URL=https://github.com/你的账号/仓库.git BRANCH=main bash one-click.sh
 ```
+
+**在线更新：**
+
+网页「设置 → 更新与备份 → 从 GitHub 更新」会执行 `git pull`；也可以在服务器上直接运行：
+
+```bash
+sudo bash /opt/subconvert-manager/one-click.sh --update-only
+```
+
+> 旧命令 `quick-install.sh` 仍然可用，它已改为转发到 `one-click.sh`，原有环境变量 `APP_DIR`、`REPO_URL`、`BRANCH`、`OPEN_CONTROL` 继续生效。
 
 ---
 
@@ -187,7 +243,8 @@ py -3 -m venv .venv
 ## 常用管理命令
 
 ```bash
-sudo bash control.sh      # 进入交互控制菜单（推荐）
+sudo bash one-click.sh    # 一键部署 / 更新（推荐，可带参数）
+sudo bash control.sh      # 进入交互控制菜单
 sudo bash install.sh      # 仅执行安装/更新
 sudo bash uninstall.sh    # 卸载并删除全部文件（含 data/）
 ```
@@ -288,6 +345,17 @@ sudo bash install.sh
 ---
 
 ## 变更记录
+
+### v1.3.0 - 2026-11-08
+
+- 界面全面重做：首页订阅源改为自适应信息卡片，新增状态色条、流量进度条、状态圆点与统计概览，窄屏不再横向滚动。
+- 复制订阅链接升级为带格式标识的按钮组，复制成功后按钮变为「已复制 ✓」并在提示中说明复制的是哪种格式。
+- 订阅源列表支持列表 / 卡片 / 紧凑三种展示方式，选择会记住；侧栏改用内联 SVG 图标并强化当前页高亮。
+- 表单页统一为分组结构，补齐输入校验样式、空状态、骨架屏、焦点样式与减少动效支持。
+- 10 套主题补齐文字专用墨色变量，全部达到 WCAG AA 对比度；排版改用系统字体栈并拉开字号字重层级。
+- 新增网站图标，9 个页面统一静态资源版本号。
+- 一键部署新增 `one-click.sh`：交互菜单、首次安装引导设置管理员账号、`--update-only` 等参数，`quick-install.sh` 转为兼容入口。
+- 修复「新增订阅」与主题面板点击外部不关闭的问题。
 
 ### v1.2.0 - 2026-11-08
 

@@ -4,3 +4,4 @@ __pycache__/
 .pytest_cache/
 config.env
 /data/sources.json
+/data/demo-sources.json

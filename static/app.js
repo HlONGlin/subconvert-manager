@@ -4,6 +4,8 @@
   var DENSITY_KEY = "scm_density_mode";
   var HOME_SECTION_KEY = "scm_home_section";
   var THEME_KEY = "scm_theme";
+  var SOURCE_VIEW_KEY = "scm_source_view";
+  var SOURCE_VIEWS = ["list", "card", "compact"];
   var THEME_NAMES = ["linear", "vercel", "supabase", "stripe", "notion", "raycast", "mintlify", "warp", "sentry", "claude"];
   var TOAST_TIMEOUT = 2800;
 
@@ -61,12 +63,41 @@
     }, TOAST_TIMEOUT);
   }
 
-  async function copyText(text) {
+  function copyButtonLabel(btn) {
+    if (!btn) {
+      return "";
+    }
+    var explicit = btn.getAttribute("data-copy-label");
+    if (explicit) {
+      return normalizeText(explicit);
+    }
+    var label = btn.querySelector("span:not(.nav-icon)");
+    return normalizeText(label ? label.textContent : btn.textContent);
+  }
+
+  function flashCopied(btn) {
+    if (!btn) {
+      return;
+    }
+    var label = btn.querySelector("span:not(.nav-icon)") || btn;
+    var original = label.textContent;
+    btn.classList.add("is-copied");
+    label.textContent = "已复制 ✓";
+    window.clearTimeout(btn.__copiedTimer);
+    btn.__copiedTimer = window.setTimeout(function () {
+      btn.classList.remove("is-copied");
+      label.textContent = original;
+      btn.__copiedTimer = null;
+    }, 1500);
+  }
+
+  async function copyText(text, label) {
     var value = text == null ? "" : String(text);
     var ta;
+    var subject = normalizeText(label);
     if (!value) {
       showToast("复制失败", "没有可复制的内容");
-      return;
+      return false;
     }
 
     try {
@@ -83,9 +114,11 @@
         document.execCommand("copy");
         ta.remove();
       }
-      showToast("复制成功", "内容已复制到剪贴板");
+      showToast("复制成功", subject ? subject + " 链接已复制到剪贴板" : "内容已复制到剪贴板");
+      return true;
     } catch (err) {
       showToast("复制失败", "浏览器未授予剪贴板权限");
+      return false;
     }
   }
 
@@ -181,6 +214,89 @@
       btn.addEventListener("click", function () {
         var compact = document.body.classList.contains("density-compact");
         applyDensity(compact ? "cozy" : "compact");
+      });
+    });
+  }
+
+  function initPopoverDismiss() {
+    var popovers = qsa("details.add-subscription-menu, details.theme-picker");
+    if (!popovers.length) {
+      return;
+    }
+
+    function closeAll(except) {
+      popovers.forEach(function (item) {
+        if (item !== except && item.open) {
+          item.open = false;
+        }
+      });
+    }
+
+    document.addEventListener("click", function (event) {
+      var target = event.target;
+      if (!(target instanceof Element)) {
+        return;
+      }
+      var owner = null;
+      popovers.forEach(function (item) {
+        if (item.contains(target)) {
+          owner = item;
+        }
+      });
+      closeAll(owner);
+      if (owner && owner.querySelector(".add-menu-panel") && target.closest("a")) {
+        owner.open = false;
+      }
+    });
+
+    document.addEventListener("keydown", function (event) {
+      if (event.key === "Escape") {
+        closeAll(null);
+      }
+    });
+  }
+
+  function loadSourceView() {
+    try {
+      var saved = window.localStorage.getItem(SOURCE_VIEW_KEY);
+      return SOURCE_VIEWS.indexOf(saved) >= 0 ? saved : "list";
+    } catch (e) {
+      return "list";
+    }
+  }
+
+  function applySourceView(mode, persist) {
+    var view = SOURCE_VIEWS.indexOf(mode) >= 0 ? mode : "list";
+    var table = qs("#sources-table");
+    if (table) {
+      SOURCE_VIEWS.forEach(function (name) {
+        table.classList.toggle("view-" + name, name === view);
+      });
+      table.setAttribute("data-view", view);
+    }
+    qsa("[data-source-view]").forEach(function (btn) {
+      var active = btn.getAttribute("data-source-view") === view;
+      btn.setAttribute("aria-pressed", active ? "true" : "false");
+      btn.classList.toggle("is-active", active);
+    });
+    if (persist) {
+      try {
+        window.localStorage.setItem(SOURCE_VIEW_KEY, view);
+      } catch (e) {
+        // 忽略隐私模式下的存储失败
+      }
+    }
+  }
+
+  function initSourceView() {
+    var buttons = qsa("[data-source-view]");
+    if (!buttons.length) {
+      return;
+    }
+    applySourceView(loadSourceView(), false);
+    buttons.forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        applySourceView(btn.getAttribute("data-source-view"), true);
       });
     });
   }
@@ -620,6 +736,7 @@
       var selector = btn.getAttribute("data-copy");
       var node = selector ? qs(selector) : null;
       var text = "";
+      var label = copyButtonLabel(btn);
 
       if (node) {
         if (Object.prototype.hasOwnProperty.call(node, "value")) {
@@ -631,7 +748,11 @@
         text = btn.getAttribute("data-copy-text") || "";
       }
 
-      copyText(text);
+      copyText(text, label).then(function (ok) {
+        if (ok) {
+          flashCopied(btn);
+        }
+      });
     });
   }
 
@@ -981,8 +1102,10 @@
     initDensityToggle();
     initThemeControls();
     initSidebarDrawer();
+    initPopoverDismiss();
     initOnlineState();
     initHomeSectionTabs();
+    initSourceView();
     initCopyTrigger();
     initFormGuards();
     initConfirmGuards();

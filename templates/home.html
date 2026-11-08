@@ -5,7 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <title>SubConvert Manager</title>
   <script>(function(){var t="linear";try{t=localStorage.getItem("scm_theme")||t;}catch(e){}if(!/^(linear|vercel|supabase|stripe|notion|raycast|mintlify|warp|sentry|claude)$/.test(t))t="linear";document.documentElement.setAttribute("data-theme",t);}());</script>
-  <link rel="stylesheet" href="{{ url_prefix }}/static/style.css?v=themes-20261108&source-layout=4"/>
+  <link rel="icon" type="image/svg+xml" href="{{ url_prefix }}/static/favicon.svg?v=ui-20261108b"/>
+  <link rel="stylesheet" href="{{ url_prefix }}/static/style.css?v=ui-20261108b"/>
 </head>
 <body>
   <div class="wrap">
@@ -15,31 +16,60 @@
           <span class="sidebar-toggle-icon" aria-hidden="true"><i></i><i></i><i></i></span><span>菜单</span>
         </button>
         <div class="home-sidebar-content" id="home-sidebar-content">
-        <div class="brand">
-          <h1>SubConvert Manager</h1>
-          <div class="sub">订阅管理与转换</div>
+        <div class="brand brand-lockup">
+          <span class="brand-mark" aria-hidden="true">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 3 8 4.5-8 4.5-8-4.5L12 3Z"/><path d="m4 12 8 4.5 8-4.5"/><path d="m4 16.5 8 4.5 8-4.5"/></svg>
+          </span>
+          <span class="brand-copy">
+            <h1>SubConvert Manager</h1>
+            <span class="sub">订阅管理与转换</span>
+          </span>
         </div>
         <nav class="home-section-tabs" role="tablist" aria-orientation="vertical" aria-label="订阅管理区域">
-          <button class="home-section-tab" type="button" role="tab" id="tab-sources" aria-controls="panel-sources" aria-selected="true" tabindex="0" data-home-tab="sources">订阅源</button>
-          <button class="home-section-tab" type="button" role="tab" id="tab-profiles" aria-controls="panel-profiles" aria-selected="false" tabindex="-1" data-home-tab="profiles">组合订阅</button>
+          <button class="home-section-tab" type="button" role="tab" id="tab-sources" aria-controls="panel-sources" aria-selected="true" tabindex="0" data-home-tab="sources">
+            <svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 11a9 9 0 0 1 9 9"/><path d="M4 4a16 16 0 0 1 16 16"/><circle cx="5" cy="19" r="1"/></svg>
+            <span>订阅源</span>
+            <span class="nav-tail">{{ source_count }}</span>
+          </button>
+          <button class="home-section-tab" type="button" role="tab" id="tab-profiles" aria-controls="panel-profiles" aria-selected="false" tabindex="-1" data-home-tab="profiles">
+            <svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="6" rx="1.6"/><rect x="3" y="14" width="18" height="6" rx="1.6"/></svg>
+            <span>组合订阅</span>
+            <span class="nav-tail">{{ profile_count }}</span>
+          </button>
         </nav>
         <div class="home-sidebar-tools">
+          <div class="nav-group-label">快捷操作</div>
           <details class="add-subscription-menu">
-            <summary class="home-section-tab" aria-label="新增订阅">新增订阅</summary>
+            <summary class="home-section-tab" aria-label="新增订阅">
+              <svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 8.5v7M8.5 12h7"/></svg>
+              <span>新增订阅</span>
+            </summary>
             <div class="add-menu-panel">
               <a href="{{ url_prefix }}/sources/new">新增订阅源</a>
               <a href="{{ url_prefix }}/profiles/new">新增组合订阅</a>
             </div>
           </details>
-          <a class="home-section-tab" href="{{ url_prefix }}/convert" aria-label="在线转换">在线转换</a>
+          <a class="home-section-tab" href="{{ url_prefix }}/convert" aria-label="在线转换">
+            <svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 8h13l-3.2-3.2"/><path d="M20 16H7l3.2 3.2"/></svg>
+            <span>在线转换</span>
+          </a>
         </div>
         <div class="home-sidebar-actions">
-          <a class="btn" href="{{ url_prefix }}/admin/settings">设置</a>
+          <div class="sidebar-divider" aria-hidden="true"></div>
+          <a class="btn" href="{{ url_prefix }}/admin/settings">
+            <svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3.2"/><path d="M12 2.6v2.6M12 18.8v2.6M4.4 4.4l1.9 1.9M17.7 17.7l1.9 1.9M2.6 12h2.6M18.8 12h2.6M4.4 19.6l1.9-1.9M17.7 6.3l1.9-1.9"/></svg>
+            <span>设置</span>
+          </a>
           <button class="btn" type="button" data-density-toggle aria-label="切换页面密度">
+            <svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6.5h16M4 12h16M4 17.5h16"/></svg>
             <span data-density-label>切换为紧凑</span>
           </button>
           <details class="theme-picker">
-            <summary class="home-section-tab theme-picker-toggle" aria-label="主题"><span>主题</span><span class="theme-current" data-theme-current>Linear</span></summary>
+            <summary class="home-section-tab theme-picker-toggle" aria-label="主题">
+              <svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.2a8.8 8.8 0 1 0 0 17.6c1 0 1.7-.8 1.7-1.7 0-.5-.2-.9-.5-1.2-.3-.3-.5-.7-.5-1.2 0-1 .8-1.7 1.7-1.7h2.2a3.4 3.4 0 0 0 3.4-3.4C20 6.4 16.4 3.2 12 3.2Z"/><circle cx="9" cy="9.6" r="1"/><circle cx="14.4" cy="8.4" r="1"/></svg>
+              <span>主题</span>
+              <span class="theme-current" data-theme-current>Linear</span>
+            </summary>
             <div class="theme-picker-panel">
               <div class="theme-grid">
               <button class="theme-swatch" type="button" data-theme-choice="linear" aria-label="Linear" title="Linear" aria-pressed="false"><span></span></button>
@@ -55,53 +85,109 @@
               </div>
             </div>
           </details>
-          <a class="btn danger" href="{{ url_prefix }}/logout" aria-label="退出登录">退出登录</a>
+          <a class="btn danger" href="{{ url_prefix }}/logout" aria-label="退出登录">
+            <svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M15 17l5-5-5-5"/><path d="M20 12H9"/><path d="M12.5 3.5H6A2.5 2.5 0 0 0 3.5 6v12A2.5 2.5 0 0 0 6 20.5h6.5"/></svg>
+            <span>退出登录</span>
+          </a>
+          <div class="home-sidebar-meta">
+            <span>v{{ version }}</span>
+            <span>{{ node_count }} 个节点</span>
+          </div>
         </div>
         </div>
       </aside>
+      <div class="sidebar-scrim" aria-hidden="true"></div>
       <main class="home-main">
     {% if failed_sources %}
-    <div class="state-block error" role="alert" style="margin-top:12px;">
-      <div class="state-title">订阅检查失败：{{ failed_sources|length }}</div>
-      {% for source in failed_sources %}<div>{{ source.name }}{% if source.last_error %}：{{ source.last_error }}{% endif %}</div>{% endfor %}
+    <div class="notice error" role="alert">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.2 2.4 20.4h19.2L12 3.2Z"/><path d="M12 9.4v4.6"/><circle cx="12" cy="17.2" r=".8"/></svg>
+      <div class="notice-body">
+        <div class="notice-title">订阅检查失败：{{ failed_sources|length }}</div>
+        <ul class="notice-list">
+          {% for source in failed_sources %}<li>{{ source.name }}{% if source.last_error %}：{{ source.last_error }}{% endif %}</li>{% endfor %}
+        </ul>
+      </div>
     </div>
     {% endif %}
 
+    <div class="stat-row" aria-label="订阅概览">
+      <div class="stat">
+        <span class="stat-label">订阅源</span>
+        <span class="stat-value">{{ source_count }}</span>
+      </div>
+      <div class="stat">
+        <span class="stat-label">组合订阅</span>
+        <span class="stat-value">{{ profile_count }}</span>
+      </div>
+      <div class="stat">
+        <span class="stat-label">可用节点</span>
+        <span class="stat-value">{{ node_count }}</span>
+      </div>
+      <div class="stat{% if failed_source_count %} is-danger{% endif %}">
+        <span class="stat-label">异常订阅</span>
+        <span class="stat-value">{{ failed_source_count }}</span>
+      </div>
+    </div>
+
     <div class="card" id="panel-profiles" role="tabpanel" aria-labelledby="tab-profiles" data-state-region="profiles" hidden>
-      <div class="kv" style="justify-content:space-between;align-items:center;">
-        <div>
+      <div class="card-head">
+        <div class="card-head-copy">
           <h3>组合订阅</h3>
           <div class="hint">合并多个来源，并应用节点筛选、去重和重命名。</div>
         </div>
+        <div class="actions">
+          <a class="btn primary" href="{{ url_prefix }}/profiles/new">新增组合订阅</a>
+        </div>
       </div>
       {% if profiles %}
-      <div class="table-wrap" style="margin-top:12px;">
-        <table class="tbl" aria-label="组合订阅列表">
-          <thead><tr><th>名称</th><th>来源</th><th>更新时间</th><th>访问统计</th><th>客户端链接</th><th class="sticky-col">操作</th></tr></thead>
+      <div class="table-wrap profile-table-wrap">
+        <table class="tbl profile-table" aria-label="组合订阅列表">
+          <thead><tr><th scope="col">名称</th><th scope="col">来源</th><th scope="col">更新时间</th><th scope="col">访问统计</th><th scope="col">订阅输出</th><th scope="col">操作</th></tr></thead>
           <tbody>
             {% for p in profiles %}
             {% set profile_base = request.base_url|string ~ (url_prefix[1:] ~ '/' if url_prefix else '') ~ 'pub/p/' ~ p.id %}
             {% set token_query = '?token=' ~ p.access_token %}
-            <tr>
-              <td data-label="名称"><strong>{{ p.name }}</strong></td>
-              <td data-label="来源">{{ p.source_ids|length }} 个</td>
-              <td data-label="更新时间"><span class="mono">{{ p.updated_at|fmt_ts }}</span></td>
-              <td data-label="访问统计">{{ p.access_count or 0 }} 次{% if p.last_access_at %}<div class="hint">最近：{{ p.last_access_at|fmt_ts }}</div>{% endif %}</td>
-              <td data-label="订阅链接">
-                <button class="btn primary" type="button" data-copy-text="{{ profile_base }}/clash{{ token_query }}">复制 Clash</button>
-                <details class="inline-details">
-                  <summary>其他链接</summary>
-                  <div class="link-stack mono">
-                    {% for label, fmt in [('Clash YAML', 'clash'), ('V2Ray Base64', 'v2ray'), ('V2Ray Raw', 'v2ray_raw'), ('sing-box JSON', 'singbox')] %}
-                    <div class="link-row"><strong>{{ label }}</strong><button class="btn ghost" type="button" data-copy-text="{{ profile_base }}/{{ fmt }}{{ token_query }}" aria-label="复制 {{ label }} 订阅链接">复制</button></div>
-                    {% endfor %}
-                  </div>
-                </details>
+            <tr class="profile-row" data-name="{{ p.name }}">
+              <td data-label="名称">
+                <div class="source-name">{{ p.name }}</div>
               </td>
-              <td class="sticky-col" data-label="操作">
-                <div class="actions row-actions">
-                  <a class="btn" href="{{ url_prefix }}/profiles/{{ p.id }}/edit" aria-label="编辑 {{ p.name }}">编辑</a>
-                  <form action="{{ url_prefix }}/profiles/{{ p.id }}/delete" method="post" data-lock-submit data-confirm="确认删除这个组合订阅？"><button class="btn danger" type="submit">删除</button></form>
+              <td data-label="来源">
+                <span class="badge">{{ p.source_ids|length }} 个来源</span>
+              </td>
+              <td data-label="更新时间">
+                <div class="source-updated">
+                  <svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.4"/><path d="M12 7.6V12l3 1.8"/></svg>
+                  <span>{{ p.updated_at|fmt_ts }}</span>
+                </div>
+              </td>
+              <td data-label="访问统计">
+                <div class="source-access"><strong>{{ p.access_count or 0 }}</strong><span>次</span></div>
+                {% if p.last_access_at %}<div class="hint source-last-access">最近 {{ p.last_access_at|fmt_ts }}</div>{% endif %}
+              </td>
+              <td data-label="订阅输出">
+                <div class="copy-group">
+                  <button class="btn primary" type="button" data-copy-text="{{ profile_base }}/clash{{ token_query }}">
+                    <svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="9" width="11" height="11" rx="2.4"/><path d="M5.5 15V5.6A2.1 2.1 0 0 1 7.6 3.5H17"/></svg>
+                    <span>复制 Clash</span>
+                  </button>
+                  <div class="copy-formats">
+                    <button class="btn format-btn format-clash" type="button" data-copy-text="{{ profile_base }}/clash{{ token_query }}" aria-label="复制 Clash YAML 订阅链接">Clash YAML</button>
+                    <button class="btn format-btn format-v2ray" type="button" data-copy-text="{{ profile_base }}/v2ray{{ token_query }}" aria-label="复制 V2Ray Base64 订阅链接">V2Ray b64</button>
+                    <button class="btn format-btn format-v2ray" type="button" data-copy-text="{{ profile_base }}/v2ray_raw{{ token_query }}" aria-label="复制 V2Ray Raw 订阅链接">V2Ray raw</button>
+                    <button class="btn format-btn format-singbox" type="button" data-copy-text="{{ profile_base }}/singbox{{ token_query }}" aria-label="复制 sing-box JSON 订阅链接">sing-box JSON</button>
+                  </div>
+                </div>
+              </td>
+              <td data-label="操作">
+                <div class="actions row-actions source-actions">
+                  <a class="btn icon" href="{{ url_prefix }}/profiles/{{ p.id }}/edit" aria-label="编辑 {{ p.name }}" title="编辑">
+                    <svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12.5 20.5H21"/><path d="M16.6 3.6a2.2 2.2 0 0 1 3.1 3.1L7.4 19l-4.2 1.1L4.3 16 16.6 3.6Z"/></svg>
+                  </a>
+                  <form action="{{ url_prefix }}/profiles/{{ p.id }}/delete" method="post" data-lock-submit data-confirm="确认删除这个组合订阅？">
+                    <button class="btn icon danger" type="submit" aria-label="删除 {{ p.name }}" title="删除">
+                      <svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M3.6 6.4h16.8"/><path d="M8.4 6.4V4.2h7.2v2.2"/><path d="M18.6 6.4 17.7 20H6.3L5.4 6.4"/></svg>
+                    </button>
+                  </form>
                 </div>
               </td>
             </tr>
@@ -110,22 +196,56 @@
         </table>
       </div>
       {% else %}
-      <div class="empty" style="margin-top:12px;">尚无组合订阅</div>
+      <div class="empty-state">
+        <span class="empty-state-icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="6" rx="1.6"/><rect x="3" y="14" width="18" height="6" rx="1.6"/></svg>
+        </span>
+        <div class="empty-state-title">还没有组合订阅</div>
+        <div class="empty-state-body">组合订阅可以把多个订阅源合并成一个链接，并统一做筛选、去重和重命名。</div>
+        <div class="actions">
+          <a class="btn primary" href="{{ url_prefix }}/profiles/new">创建第一个组合订阅</a>
+        </div>
+      </div>
       {% endif %}
     </div>
 
     <div class="card" id="panel-sources" role="tabpanel" aria-labelledby="tab-sources" data-state-region="sources">
-      <div class="kv" style="justify-content:space-between;align-items:flex-start;">
-        <div>
+      <div class="card-head">
+        <div class="card-head-copy">
           <h3>订阅源</h3>
           <div class="hint">支持 V2Ray Base64 / Raw / Clash(play)。</div>
+        </div>
+        <div class="actions">
+          {% if sources|length > 0 %}
+          <div class="view-switch" role="group" aria-label="订阅源展示方式">
+            <button class="view-switch-btn" type="button" data-source-view="list" aria-pressed="true" aria-label="列表视图" title="列表视图">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6.5h11M9 12h11M9 17.5h11"/><circle cx="4.6" cy="6.5" r="1.3"/><circle cx="4.6" cy="12" r="1.3"/><circle cx="4.6" cy="17.5" r="1.3"/></svg>
+            </button>
+            <button class="view-switch-btn" type="button" data-source-view="card" aria-pressed="false" aria-label="卡片视图" title="卡片视图">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.4" y="3.4" width="7.4" height="7.4" rx="1.6"/><rect x="13.2" y="3.4" width="7.4" height="7.4" rx="1.6"/><rect x="3.4" y="13.2" width="7.4" height="7.4" rx="1.6"/><rect x="13.2" y="13.2" width="7.4" height="7.4" rx="1.6"/></svg>
+            </button>
+            <button class="view-switch-btn" type="button" data-source-view="compact" aria-pressed="false" aria-label="紧凑视图" title="紧凑视图">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16M4 10h16M4 14h16M4 18h16"/></svg>
+            </button>
+          </div>
+          {% endif %}
+          <a class="btn primary" href="{{ url_prefix }}/sources/new">
+            <svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 8.5v7M8.5 12h7"/></svg>
+            <span>新增订阅源</span>
+          </a>
         </div>
       </div>
 
       {% if sources|length == 0 %}
-      <div class="empty" style="margin-top:12px;">
-        <div class="state-title">暂无订阅源</div>
-        <div class="hint">使用顶部“新增订阅”菜单创建订阅源或组合订阅。</div>
+      <div class="empty-state">
+        <span class="empty-state-icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24"><path d="M3.2 12.4h4.6l1.8 2.8h4.8l1.8-2.8h4.6"/><path d="M5.4 4.8h13.2l2 7.2v6.2a1.8 1.8 0 0 1-1.8 1.8H5.2a1.8 1.8 0 0 1-1.8-1.8V12l2-7.2Z"/></svg>
+        </span>
+        <div class="empty-state-title">还没有订阅源</div>
+        <div class="empty-state-body">添加一个订阅源后，这里会显示它的健康状态、流量与可复制的订阅链接。</div>
+        <div class="actions">
+          <a class="btn primary" href="{{ url_prefix }}/sources/new">添加第一个订阅</a>
+        </div>
       </div>
       {% else %}
       <div class="toolbar" role="group" aria-label="筛选工具">
@@ -202,12 +322,12 @@
         </div>
       </dialog>
 
-      <div id="source-empty-filter" class="state-block" hidden style="margin-top:12px;">
+      <div id="source-empty-filter" class="state-block" hidden>
         <div class="state-title">无匹配结果</div>
         <div class="hint">请调整筛选条件。</div>
       </div>
 
-      <div class="table-wrap sources-table-wrap" style="margin-top:12px;">
+      <div class="table-wrap sources-table-wrap">
         <table class="tbl sources-table" id="sources-table" aria-label="订阅源列表">
           <thead>
             <tr>
@@ -217,7 +337,7 @@
               <th scope="col">最近状态 / 健康</th>
               <th scope="col">订阅输出</th>
               <th scope="col">访问统计</th>
-              <th scope="col" class="sticky-col">操作</th>
+              <th scope="col">操作</th>
             </tr>
           </thead>
           <tbody>
@@ -227,7 +347,32 @@
             {% set u_v2ray = base ~ (url_prefix[1:] ~ '/' if url_prefix else '') ~ 'pub/s/' ~ sid ~ '/v2ray?token=' ~ s.access_token %}
             {% set u_v2ray_raw = base ~ (url_prefix[1:] ~ '/' if url_prefix else '') ~ 'pub/s/' ~ sid ~ '/v2ray_raw?token=' ~ s.access_token %}
             {% set u_clash_play = base ~ (url_prefix[1:] ~ '/' if url_prefix else '') ~ 'pub/s/' ~ sid ~ '/clash?token=' ~ s.access_token ~ '&template=play' %}
-            <tr class="source-row" data-name="{{ s.name }}" data-kind="{{ s.kind }}" data-updated="{{ s.updated_at if s.updated_at else 0 }}">
+            {% set u_singbox = base ~ (url_prefix[1:] ~ '/' if url_prefix else '') ~ 'pub/s/' ~ sid ~ '/singbox?token=' ~ s.access_token %}
+            {% set used = s.traffic_used or 0 %}
+            {% set total = s.traffic_total or 0 %}
+            {% set pct = ((used * 100 / total) | round(0, 'floor') | int) if total else 0 %}
+            {% set pct_bar = 100 if pct > 100 else pct %}
+            {% if s.last_status == 'failed' %}
+              {% set health_state = 'danger' %}
+              {% set health_label = '刷新失败' %}
+            {% elif s.last_status == 'warning' %}
+              {% set health_state = 'warn' %}
+              {% set health_label = '部分跳过' %}
+            {% elif s.last_status == 'ok' %}
+              {% set health_state = 'ok' %}
+              {% set health_label = '正常' %}
+            {% else %}
+              {% set health_state = 'idle' %}
+              {% set health_label = '未检查' %}
+            {% endif %}
+            {% if pct >= 100 %}
+              {% set meter_state = 'danger' %}
+            {% elif s.traffic_expiring or pct >= 85 %}
+              {% set meter_state = 'warn' %}
+            {% else %}
+              {% set meter_state = 'ok' %}
+            {% endif %}
+            <tr class="source-row health-{{ health_state }}" data-name="{{ s.name }}" data-kind="{{ s.kind }}" data-updated="{{ s.updated_at if s.updated_at else 0 }}">
               <td data-label="名称">
                 <div class="source-name">{{ s.name }}</div>
               </td>
@@ -243,58 +388,75 @@
                 {% endif %}
               </td>
               <td data-label="更新时间">
-                <div class="source-updated">{{ s.updated_at|fmt_ts }}</div>
+                <div class="source-updated">
+                  <svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.4"/><path d="M12 7.6V12l3 1.8"/></svg>
+                  <span>{{ s.updated_at|fmt_ts }}</span>
+                </div>
               </td>
               <td data-label="最近状态 / 健康">
                 <div class="source-health">
-                  {% if s.last_status == 'ok' %}<span class="badge ok">正常 <span>{{ s.last_node_count or 0 }} 节点</span></span>
-                  {% elif s.last_status == 'warning' %}<span class="badge warn">部分跳过 <span>{{ s.last_node_count or 0 }} 节点</span></span>
-                  {% elif s.last_status == 'failed' %}<span class="badge danger">刷新失败</span>
-                  {% else %}<span class="badge">未检查</span>{% endif %}
+                  <div class="source-health-head">
+                    <span class="badge {{ health_state }}"><span class="dot {{ health_state }}" aria-hidden="true"></span>{{ health_label }}{% if s.last_status in ['ok', 'warning'] %} <span>{{ s.last_node_count or 0 }} 节点</span>{% endif %}</span>
+                  </div>
+                  {% if total %}
+                  <div class="meter">
+                    <div class="meter-track" role="img" aria-label="流量已用 {{ pct }}%">
+                      <span class="meter-fill {{ meter_state }}" style="width: {{ pct_bar }}%"></span>
+                    </div>
+                    <div class="meter-text">
+                      <span>已用 <strong>{{ s.traffic_used|fmt_bytes }}</strong> / {{ s.traffic_total|fmt_bytes }}</span>
+                      <span><strong>{{ pct }}%</strong></span>
+                    </div>
+                  </div>
+                  {% endif %}
                   <div class="source-health-meta">
                     {% if s.last_checked_at %}<div class="hint">检查于 {{ s.last_checked_at|fmt_ts }}</div>{% endif %}
-                    {% if s.traffic_total %}<div class="hint">已用 {{ s.traffic_used|fmt_bytes }} / {{ s.traffic_total|fmt_bytes }} · 剩余 {{ s.traffic_remaining|fmt_bytes }}</div>{% endif %}
-                    {% if s.traffic_expire %}<div class="hint{% if s.traffic_expiring %} health-expiring{% endif %}">到期：{{ s.traffic_expire|fmt_ts }}</div>{% endif %}
+                    {% if total %}<div class="hint">剩余 {{ s.traffic_remaining|fmt_bytes }}</div>{% endif %}
+                    {% if s.traffic_expire %}
+                    <div class="hint{% if s.traffic_expiring %} health-expiring{% endif %}">
+                      {% if s.traffic_expiring %}
+                      <svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.2 2.4 20.4h19.2L12 3.2Z"/><path d="M12 9.4v4.6"/><circle cx="12" cy="17.2" r=".8"/></svg>
+                      {% endif %}
+                      <span>到期：{{ s.traffic_expire|fmt_ts }}</span>
+                    </div>
+                    {% endif %}
                     {% if s.traffic_reset %}<div class="hint">重置：{{ s.traffic_reset|fmt_reset }}</div>{% endif %}
                     {% if s.traffic_checked_at %}<div class="hint">流量更新：{{ s.traffic_checked_at|fmt_ts }}</div>{% endif %}
                   </div>
                 </div>
               </td>
-              <td data-label="订阅">
-                <div class="source-output">
-                  <button class="btn primary" type="button" data-copy-text="{{ u_clash_play }}">复制 Clash</button>
-                  <details class="inline-details">
-                  <summary>其他链接</summary>
-                  <div class="link-stack mono">
-                    <div class="link-row">
-                      <strong>V2Ray b64</strong>
-                      <button class="btn ghost" type="button" data-copy-text="{{ u_v2ray }}" aria-label="复制 V2Ray b64 链接">复制</button>
-                    </div>
-                    <div class="link-row">
-                      <strong>V2Ray raw</strong>
-                      <button class="btn ghost" type="button" data-copy-text="{{ u_v2ray_raw }}" aria-label="复制 V2Ray raw 链接">复制</button>
-                    </div>
-                    <div class="link-row">
-                      <strong>Clash play</strong>
-                      <button class="btn ghost" type="button" data-copy-text="{{ u_clash_play }}" aria-label="复制 Clash play 链接">复制</button>
-                    </div>
-                    <div class="link-row">
-                      <strong>sing-box JSON</strong>
-                      <button class="btn ghost" type="button" data-copy-text="{{ base ~ (url_prefix[1:] ~ '/' if url_prefix else '') ~ 'pub/s/' ~ sid ~ '/singbox?token=' ~ s.access_token }}" aria-label="复制 sing-box 订阅链接">复制</button>
-                    </div>
+              <td data-label="订阅输出">
+                <div class="copy-group">
+                  <button class="btn primary" type="button" data-copy-text="{{ u_clash_play }}">
+                    <svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="9" width="11" height="11" rx="2.4"/><path d="M5.5 15V5.6A2.1 2.1 0 0 1 7.6 3.5H17"/></svg>
+                    <span>复制 Clash</span>
+                  </button>
+                  <div class="copy-formats">
+                    <button class="btn format-btn format-v2ray" type="button" data-copy-text="{{ u_v2ray }}" aria-label="复制 V2Ray b64 链接">V2Ray b64</button>
+                    <button class="btn format-btn format-v2ray" type="button" data-copy-text="{{ u_v2ray_raw }}" aria-label="复制 V2Ray raw 链接">V2Ray raw</button>
+                    <button class="btn format-btn format-clash" type="button" data-copy-text="{{ u_clash_play }}" aria-label="复制 Clash play 链接">Clash play</button>
+                    <button class="btn format-btn format-singbox" type="button" data-copy-text="{{ u_singbox }}" aria-label="复制 sing-box 订阅链接">sing-box JSON</button>
                   </div>
-                  </details>
                 </div>
               </td>
-              <td data-label="访问统计"><div class="source-access"><strong>{{ s.access_count or 0 }}</strong><span>次</span></div>{% if s.last_access_at %}<div class="hint source-last-access">最近访问 {{ s.last_access_at|fmt_ts }}</div>{% endif %}</td>
-              <td class="sticky-col" data-label="操作">
+              <td data-label="访问统计">
+                <div class="source-access"><strong>{{ s.access_count or 0 }}</strong><span>次</span></div>
+                {% if s.last_access_at %}<div class="hint source-last-access">最近访问 {{ s.last_access_at|fmt_ts }}</div>{% endif %}
+              </td>
+              <td data-label="操作">
                 <div class="actions row-actions source-actions">
                   <form action="{{ url_prefix }}/sources/{{ sid }}/check" method="post" data-lock-submit>
-                    <button class="btn" type="submit" aria-label="检查 {{ s.name }}">检查</button>
+                    <button class="btn icon" type="submit" aria-label="检查 {{ s.name }}" title="检查">
+                      <svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20.6 12a8.6 8.6 0 1 1-2.9-6.4"/><path d="M20.8 3.4v5.4h-5.4"/></svg>
+                    </button>
                   </form>
-                  <a class="btn" href="{{ url_prefix }}/sources/{{ sid }}/edit" aria-label="编辑 {{ s.name }}">编辑</a>
+                  <a class="btn icon" href="{{ url_prefix }}/sources/{{ sid }}/edit" aria-label="编辑 {{ s.name }}" title="编辑">
+                    <svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12.5 20.5H21"/><path d="M16.6 3.6a2.2 2.2 0 0 1 3.1 3.1L7.4 19l-4.2 1.1L4.3 16 16.6 3.6Z"/></svg>
+                  </a>
                   <form action="{{ url_prefix }}/sources/{{ sid }}/delete" method="post" data-lock-submit data-confirm="确认删除？">
-                    <button class="btn danger" type="submit" aria-label="删除 {{ s.name }}">删除</button>
+                    <button class="btn icon danger" type="submit" aria-label="删除 {{ s.name }}" title="删除">
+                      <svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M3.6 6.4h16.8"/><path d="M8.4 6.4V4.2h7.2v2.2"/><path d="M18.6 6.4 17.7 20H6.3L5.4 6.4"/></svg>
+                    </button>
                   </form>
                 </div>
               </td>
@@ -314,6 +476,6 @@
     <div class="msg"></div>
   </div>
 
-  <script src="{{ url_prefix }}/static/app.js?v=home-sidebar-20261108&theme-picker=2"></script>
+  <script src="{{ url_prefix }}/static/app.js?v=ui-20261108b"></script>
 </body>
 </html>

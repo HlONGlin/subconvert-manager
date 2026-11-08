@@ -1,10 +1,12 @@
 <!doctype html>
-<html lang="zh-CN">
+<html lang="zh-CN" data-theme="linear">
 <head>
   <meta charset="utf-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <title>{{ title }} - SubConvert Manager</title>
-  <link rel="stylesheet" href="{{ url_prefix }}/static/style.css"/>
+  <script>(function(){var t="linear";try{t=localStorage.getItem("scm_theme")||t;}catch(e){}if(!/^(linear|vercel|supabase|stripe|notion|raycast|mintlify|warp|sentry|claude)$/.test(t))t="linear";document.documentElement.setAttribute("data-theme",t);}());</script>
+  <link rel="icon" type="image/svg+xml" href="{{ url_prefix }}/static/favicon.svg?v=ui-20261108b"/>
+  <link rel="stylesheet" href="{{ url_prefix }}/static/style.css?v=ui-20261108b"/>
 </head>
 <body>
   <div class="wrap">
@@ -20,15 +22,15 @@
       </div>
     </div>
 
-    <div class="card state-block success" style="margin-bottom:12px;">
+    <div class="state-block success">
       <div class="state-title">转换成功</div>
       <div class="hint">可直接复制结果。</div>
     </div>
 
     {% if issues %}
-    <section class="state-block" role="status" style="margin-bottom:12px; overflow-wrap:anywhere;">
+    <section class="state-block" role="status">
       <div class="state-title">转换记录</div>
-      <ul>
+      <ul class="record-list">
         {% for issue in issues %}
         <li>#{{ issue.index }} · {{ issue.protocol }} · {{ "已跳过" if issue.severity == "error" else "参数提示" }}：{{ issue.reason }}</li>
         {% endfor %}
@@ -45,7 +47,7 @@
         </label>
       </div>
       <hr class="sep"/>
-      <textarea id="out" class="out mono" style="height:430px;" readonly aria-label="转换输出内容">{{ output }}</textarea>
+      <textarea id="out" class="out mono textarea-xl" readonly aria-label="转换输出内容">{{ output }}</textarea>
     </div>
   </div>
 
@@ -54,6 +56,6 @@
     <div class="msg"></div>
   </div>
 
-  <script src="{{ url_prefix }}/static/app.js"></script>
+  <script src="{{ url_prefix }}/static/app.js?v=ui-20261108b"></script>
 </body>
 </html>

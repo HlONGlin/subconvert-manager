@@ -1,131 +1,54 @@
 #!/usr/bin/env bash
+# 兼容入口：保留旧的一键命令，实际逻辑已迁移到 one-click.sh
+#
+#   bash <(curl -fsSL https://github.com/HlONGlin/subconvert-manager/raw/main/quick-install.sh)
+#
+# 旧的环境变量仍然可用：
+#   APP_DIR       安装目录（等价于 --dir）
+#   REPO_URL      仓库地址
+#   BRANCH        分支
+#   OPEN_CONTROL  auto/0/1，0 表示装完不进菜单（等价于 --no-menu）
 set -Eeuo pipefail
 IFS=$'\n\t'
 
-REPO_URL="${REPO_URL:-https://github.com/HlONGlin/subconvert-manager.git}"
-BRANCH="${BRANCH:-main}"
-APP_DIR="${APP_DIR:-/opt/subconvert-manager}"
-OPEN_CONTROL="${OPEN_CONTROL:-auto}"
+ONECLICK_URL="${ONECLICK_URL:-https://raw.githubusercontent.com/HlONGlin/subconvert-manager/main/one-click.sh}"
 
-log() {
-  printf '[%s] %s\n' "$(date '+%Y-%m-%d %H:%M:%S')" "$*"
+args=("$@")
+
+has_flag() {
+  local want="$1" item
+  for item in "${args[@]:-}"; do
+    [[ "$item" == "$want" || "$item" == "$want="* ]] && return 0
+  done
+  return 1
 }
 
-die() {
-  printf '[%s] ERROR: %s\n' "$(date '+%Y-%m-%d %H:%M:%S')" "$*" >&2
+# 旧变量 -> 新参数
+if [[ -n "${APP_DIR:-}" ]] && ! has_flag "--dir"; then
+  args+=("--dir" "$APP_DIR")
+fi
+case "$(printf '%s' "${OPEN_CONTROL:-auto}" | tr '[:upper:]' '[:lower:]')" in
+  0|false|no|off) has_flag "--no-menu" || args+=("--no-menu") ;;
+esac
+
+here="$(cd "$(dirname "${BASH_SOURCE[0]:-}")" 2>/dev/null && pwd || true)"
+if [[ -n "$here" && -f "$here/one-click.sh" ]]; then
+  exec bash "$here/one-click.sh" "${args[@]}"
+fi
+
+tmp="$(mktemp)"
+if command -v curl >/dev/null 2>&1; then
+  curl -fsSL "$ONECLICK_URL" -o "$tmp"
+elif command -v wget >/dev/null 2>&1; then
+  wget -qO "$tmp" "$ONECLICK_URL"
+else
+  printf '需要 curl 或 wget 才能下载 one-click.sh\n' >&2
   exit 1
-}
+fi
 
-warn() {
-  printf '[%s] WARN: %s\n' "$(date '+%Y-%m-%d %H:%M:%S')" "$*" >&2
-}
-
-has_cmd() {
-  command -v "$1" >/dev/null 2>&1
-}
-
-require_root() {
-  if [[ "${EUID:-$(id -u)}" -ne 0 ]]; then
-    die "Please run as root. Example: curl -fsSL https://raw.githubusercontent.com/HlONGlin/subconvert-manager/main/quick-install.sh | sudo bash"
-  fi
-}
-
-detect_pkg_manager() {
-  if has_cmd apt-get; then echo "apt"; return; fi
-  if has_cmd dnf; then echo "dnf"; return; fi
-  if has_cmd yum; then echo "yum"; return; fi
-  if has_cmd zypper; then echo "zypper"; return; fi
-  if has_cmd pacman; then echo "pacman"; return; fi
-  if has_cmd apk; then echo "apk"; return; fi
-  echo "none"
-}
-
-ensure_git() {
-  if has_cmd git; then
-    return
-  fi
-
-  local pm
-  pm="$(detect_pkg_manager)"
-  log "git not found, trying to install via package manager: $pm"
-
-  case "$pm" in
-    apt)
-      export DEBIAN_FRONTEND=noninteractive
-      apt-get update -y
-      apt-get install -y git
-      ;;
-    dnf) dnf -y install git ;;
-    yum) yum -y install git ;;
-    zypper) zypper --non-interactive install git ;;
-    pacman) pacman -Sy --noconfirm git ;;
-    apk) apk add --no-cache git ;;
-    *) die "git not found and unsupported package manager. Install git manually first." ;;
-  esac
-}
-
-sync_repo() {
-  mkdir -p "$(dirname "$APP_DIR")"
-
-  if [[ -d "$APP_DIR/.git" ]]; then
-    if [[ -n "$(git -C "$APP_DIR" status --porcelain 2>/dev/null || true)" ]]; then
-      warn "Repository has local changes, skip auto-update and keep current local version."
-      return
-    fi
-
-    log "Repository exists, pulling latest from $BRANCH"
-    if ! git -C "$APP_DIR" fetch origin "$BRANCH" || \
-       ! git -C "$APP_DIR" checkout "$BRANCH" || \
-       ! git -C "$APP_DIR" pull --ff-only origin "$BRANCH"; then
-      warn "Failed to update repository automatically, continue with current local version."
-    fi
-    return
-  fi
-
-  if [[ -e "$APP_DIR" ]] && [[ -n "$(ls -A "$APP_DIR" 2>/dev/null || true)" ]]; then
-    die "Target directory is not empty: $APP_DIR"
-  fi
-
-  log "Cloning repository to $APP_DIR"
-  git clone --depth 1 -b "$BRANCH" "$REPO_URL" "$APP_DIR"
-}
-
-should_open_control() {
-  local v
-  v="$(printf '%s' "$OPEN_CONTROL" | tr '[:upper:]' '[:lower:]')"
-  case "$v" in
-    1|true|yes|on) return 0 ;;
-    0|false|no|off) return 1 ;;
-    auto|"")
-      [[ -t 0 && -t 1 ]]
-      return
-      ;;
-    *)
-      warn "Unknown OPEN_CONTROL='$OPEN_CONTROL', fallback to auto"
-      [[ -t 0 && -t 1 ]]
-      return
-      ;;
-  esac
-}
-
-main() {
-  require_root
-  ensure_git
-  sync_repo
-
-  cd "$APP_DIR"
-  chmod +x control.sh install.sh uninstall.sh quick-install.sh || true
-
-  log "Running install.sh"
-  bash install.sh
-
-  if should_open_control; then
-    log "Opening control menu: $APP_DIR/control.sh"
-    exec bash "$APP_DIR/control.sh"
-  fi
-
-  log "Done. You can manage service with:"
-  log "sudo bash $APP_DIR/control.sh"
-}
-
-main "$@"
+set +e
+bash "$tmp" "${args[@]}"
+status=$?
+set -e
+rm -f "$tmp"
+exit "$status"

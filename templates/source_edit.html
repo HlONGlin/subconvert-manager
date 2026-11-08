@@ -1,10 +1,12 @@
 <!doctype html>
-<html lang="zh-CN">
+<html lang="zh-CN" data-theme="linear">
 <head>
   <meta charset="utf-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <title>{{ "新增订阅源" if not src else "编辑订阅源" }} - SubConvert Manager</title>
-  <link rel="stylesheet" href="{{ url_prefix }}/static/style.css"/>
+  <script>(function(){var t="linear";try{t=localStorage.getItem("scm_theme")||t;}catch(e){}if(!/^(linear|vercel|supabase|stripe|notion|raycast|mintlify|warp|sentry|claude)$/.test(t))t="linear";document.documentElement.setAttribute("data-theme",t);}());</script>
+  <link rel="icon" type="image/svg+xml" href="{{ url_prefix }}/static/favicon.svg?v=ui-20261108b"/>
+  <link rel="stylesheet" href="{{ url_prefix }}/static/style.css?v=ui-20261108b"/>
 </head>
 <body>
   <div class="wrap">
@@ -19,69 +21,91 @@
       </div>
     </div>
 
-    <div class="grid">
+    <div class="layout-aside">
       <div class="card">
         <form action="{{ url_prefix }}/sources/save" method="post" enctype="multipart/form-data" data-lock-submit>
           <input type="hidden" name="sid" value="{{ src.id if src else '' }}"/>
 
-          <div class="row">
-            <label for="source-name">名称</label>
-            <input id="source-name" name="name" value="{{ src.name if src else '' }}" placeholder="例如：我的机场A / 自建节点" required aria-label="订阅源名称"/>
-          </div>
-
-          <div class="row">
-            <label for="source-kind">类型</label>
-            <select id="source-kind" name="kind" required aria-label="订阅源类型" data-source-kind>
-              <option value="auto" {% if not src %}selected{% endif %}>自动识别</option>
-              <option value="clash_url" {% if src and src.kind=='clash_url' %}selected{% endif %}>clash_url（远程 YAML）</option>
-              <option value="v2ray_text" {% if src and src.kind=='v2ray_text' %}selected{% endif %}>v2ray_text（多行 URI / base64）</option>
-              <option value="clash_yaml" {% if src and src.kind=='clash_yaml' %}selected{% endif %}>clash_yaml（本地文本/文件）</option>
-            </select>
-            <div class="hint" data-source-kind-hint>识别结果：<span data-source-kind-preview>等待输入</span></div>
-          </div>
-
-          <div class="quick-grid">
-            <div class="row">
-              <label>Clash 默认模板</label>
-              <div class="hint">固定为 <span class="mono">play</span>。</div>
-              <input type="hidden" name="clash_template" value="play"/>
+          <section class="form-section">
+            <div class="form-section-head">
+              <h3>基本信息</h3>
+              <div class="hint">名称用于列表展示与组合订阅引用，类型留空会自动识别。</div>
             </div>
-            <div class="row">
-              <label for="source-rate-limit">限速（Mbps，可选）</label>
-              <input
-                id="source-rate-limit"
-                name="rate_limit_mbps"
-                type="number"
-                min="0"
-                max="10000"
-                value="{{ src.rate_limit_mbps if src and src.rate_limit_mbps else 0 }}"
-                data-validate-int
-                data-min="0"
-                data-max="10000"
-                aria-label="限速 Mbps"
-              />
-              <div class="hint">仅在 play 模板中生效。</div>
+
+            <div class="field">
+              <label for="source-name">名称</label>
+              <input id="source-name" name="name" value="{{ src.name if src else '' }}" placeholder="例如：我的机场A / 自建节点" required aria-label="订阅源名称"/>
             </div>
-          </div>
 
-          <div class="row">
-            <label for="source-value">内容</label>
-            <textarea
-              id="source-value"
-              name="value"
-              class="out"
-              style="height:240px;"
-              placeholder="粘贴订阅 URL、V2Ray URI / Base64 或 Clash YAML"
-              aria-label="订阅源内容"
-            >{{ src.value if src else '' }}</textarea>
-          </div>
+            <div class="field">
+              <label for="source-kind">类型</label>
+              <select id="source-kind" name="kind" required aria-label="订阅源类型" data-source-kind>
+                <option value="auto" {% if not src %}selected{% endif %}>自动识别</option>
+                <option value="clash_url" {% if src and src.kind=='clash_url' %}selected{% endif %}>clash_url（远程 YAML）</option>
+                <option value="v2ray_text" {% if src and src.kind=='v2ray_text' %}selected{% endif %}>v2ray_text（多行 URI / base64）</option>
+                <option value="clash_yaml" {% if src and src.kind=='clash_yaml' %}selected{% endif %}>clash_yaml（本地文本/文件）</option>
+              </select>
+              <div class="hint" data-source-kind-hint>识别结果：<span data-source-kind-preview>等待输入</span></div>
+            </div>
+          </section>
 
-          <div class="row">
-            <label for="source-file">上传 YAML 文件（文件内容将覆盖文本）</label>
-            <input id="source-file" type="file" name="file" accept=".yaml,.yml,text/yaml" aria-label="上传 YAML 文件"/>
-          </div>
+          <section class="form-section">
+            <div class="form-section-head">
+              <h3>订阅内容</h3>
+              <div class="hint">粘贴订阅 URL、V2Ray URI / Base64 或 Clash YAML；也可以直接上传文件。</div>
+            </div>
 
-          <div class="actions" style="margin-top:12px;">
+            <div class="field">
+              <label for="source-value">内容</label>
+              <textarea
+                id="source-value"
+                name="value"
+                class="out mono textarea-lg"
+                placeholder="粘贴订阅 URL、V2Ray URI / Base64 或 Clash YAML"
+                aria-label="订阅源内容"
+              >{{ src.value if src else '' }}</textarea>
+            </div>
+
+            <div class="field">
+              <label for="source-file">上传 YAML 文件</label>
+              <input id="source-file" type="file" name="file" accept=".yaml,.yml,text/yaml" aria-label="上传 YAML 文件"/>
+              <div class="hint">上传的文件内容会覆盖上面的文本内容。</div>
+            </div>
+          </section>
+
+          <section class="form-section">
+            <div class="form-section-head">
+              <h3>输出参数</h3>
+              <div class="hint">影响生成的 Clash 配置。</div>
+            </div>
+
+            <div class="field-row">
+              <div class="field">
+                <label>Clash 默认模板</label>
+                <input class="mono" value="play" readonly aria-label="Clash 默认模板"/>
+                <input type="hidden" name="clash_template" value="play"/>
+                <div class="hint">当前固定为 <span class="mono">play</span>（含分组与策略）。</div>
+              </div>
+              <div class="field">
+                <label for="source-rate-limit">限速（Mbps，可选）</label>
+                <input
+                  id="source-rate-limit"
+                  name="rate_limit_mbps"
+                  type="number"
+                  min="0"
+                  max="10000"
+                  value="{{ src.rate_limit_mbps if src and src.rate_limit_mbps else 0 }}"
+                  data-validate-int
+                  data-min="0"
+                  data-max="10000"
+                  aria-label="限速 Mbps"
+                />
+                <div class="hint">0 表示不限速，仅在 play 模板中生效。</div>
+              </div>
+            </div>
+          </section>
+
+          <div class="form-actions">
             <button class="btn primary" type="submit">保存</button>
             <a class="btn ghost" href="{{ url_prefix }}/">取消</a>
           </div>
@@ -89,16 +113,31 @@
       </div>
 
       <div class="card">
-        <h3>输入规范</h3>
-        <div class="hint" style="margin-top:8px;">
-          <span class="mono">clash_url</span>：填写可访问的 http/https YAML 链接。<br/>
-          <span class="mono">v2ray_text</span>：支持多行 URI 或单段 Base64 订阅文本。<br/>
-          <span class="mono">clash_yaml</span>：适合离线保存或手工编辑后的 YAML。
+        <div class="form-section-head">
+          <h3>输入规范</h3>
+          <div class="hint">三种类型各自的填写方式。</div>
+        </div>
+        <hr class="sep"/>
+        <div class="stack-lg">
+          <div class="stack">
+            <div class="source-kind"><span class="source-kind-mark">URL</span><span class="source-kind-copy"><strong>clash_url</strong><small>远程订阅地址</small></span></div>
+            <div class="hint">填写可访问的 http/https YAML 链接，服务端会拉取并缓存。</div>
+          </div>
+          <div class="stack">
+            <div class="source-kind source-kind--uri"><span class="source-kind-mark">URI</span><span class="source-kind-copy"><strong>v2ray_text</strong><small>多行 URI / Base64</small></span></div>
+            <div class="hint">支持多行分享链接，或单段 Base64 订阅文本。</div>
+          </div>
+          <div class="stack">
+            <div class="source-kind source-kind--yaml"><span class="source-kind-mark">YAML</span><span class="source-kind-copy"><strong>clash_yaml</strong><small>本地文本 / 文件</small></span></div>
+            <div class="hint">适合离线保存或手工编辑后的 YAML，需要包含 <span class="mono">proxies</span> 字段。</div>
+          </div>
         </div>
         {% if src %}
         <hr class="sep"/>
-        <div class="hint">当前 ID：<span class="mono">{{ src.id }}</span></div>
-        <div class="hint">最近更新：<span class="mono">{{ src.updated_at|fmt_ts }}</span></div>
+        <div class="stack">
+          <div class="hint">当前 ID：<span class="mono">{{ src.id }}</span></div>
+          <div class="hint">最近更新：<span class="mono">{{ src.updated_at|fmt_ts }}</span></div>
+        </div>
         {% endif %}
       </div>
     </div>
@@ -109,6 +148,6 @@
     <div class="msg"></div>
   </div>
 
-  <script src="{{ url_prefix }}/static/app.js"></script>
+  <script src="{{ url_prefix }}/static/app.js?v=ui-20261108b"></script>
 </body>
 </html>

@@ -1,10 +1,12 @@
 <!doctype html>
-<html lang="zh-CN">
+<html lang="zh-CN" data-theme="linear">
 <head>
   <meta charset="utf-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <title>{{ "新增组合订阅" if not profile else "编辑组合订阅" }} - SubConvert Manager</title>
-  <link rel="stylesheet" href="{{ url_prefix }}/static/style.css"/>
+  <script>(function(){var t="linear";try{t=localStorage.getItem("scm_theme")||t;}catch(e){}if(!/^(linear|vercel|supabase|stripe|notion|raycast|mintlify|warp|sentry|claude)$/.test(t))t="linear";document.documentElement.setAttribute("data-theme",t);}());</script>
+  <link rel="icon" type="image/svg+xml" href="{{ url_prefix }}/static/favicon.svg?v=ui-20261108b"/>
+  <link rel="stylesheet" href="{{ url_prefix }}/static/style.css?v=ui-20261108b"/>
 </head>
 <body>
   <div class="wrap">
@@ -21,102 +23,142 @@
     <div class="card">
       <form action="{{ url_prefix }}/profiles/save" method="post" data-lock-submit>
         <input type="hidden" name="pid" value="{{ profile.id if profile else '' }}"/>
-        <div class="row">
-          <label for="profile-name">名称</label>
-          <input id="profile-name" name="name" value="{{ profile.name if profile else '' }}" required maxlength="80" placeholder="例如：日常节点"/>
-        </div>
 
-        <div class="row">
-          <label>订阅来源</label>
-          {% if sources %}
-          <div class="source-picks">
-            {% for source in sources %}
-            <label class="source-pick">
-              <input type="checkbox" name="source_ids" value="{{ source.id }}" {% if profile and source.id in profile.source_ids %}checked{% endif %}/>
-              <span>{{ source.name }}</span>
-              <small>{{ source.kind }}</small>
-            </label>
-            {% endfor %}
+        <section class="form-section">
+          <div class="form-section-head">
+            <h3>基本信息</h3>
+            <div class="hint">名称用于列表展示与订阅链接标识。</div>
           </div>
-          {% else %}
-          <div class="state-block">先新增至少一个订阅源。</div>
-          {% endif %}
-        </div>
 
-        <div class="quick-grid">
-          <div class="row">
-            <label for="filter-mode">筛选方式</label>
-            <select id="filter-mode" name="filter_mode">
-              <option value="keyword" {% if not profile or profile.filter_mode == 'keyword' %}selected{% endif %}>名称关键词</option>
-              <option value="regex" {% if profile and profile.filter_mode == 'regex' %}selected{% endif %}>正则表达式</option>
-            </select>
+          <div class="field">
+            <label for="profile-name">名称</label>
+            <input id="profile-name" name="name" value="{{ profile.name if profile else '' }}" required maxlength="80" placeholder="例如：日常节点"/>
           </div>
-          <div class="row">
-            <label for="profile-sort">节点排序</label>
-            <select id="profile-sort" name="sort">
-              <option value="name" {% if not profile or profile.sort == 'name' %}selected{% endif %}>名称升序</option>
-              <option value="name_desc" {% if profile and profile.sort == 'name_desc' %}selected{% endif %}>名称降序</option>
-              <option value="protocol" {% if profile and profile.sort == 'protocol' %}selected{% endif %}>按协议</option>
-              <option value="source" {% if profile and profile.sort == 'source' %}selected{% endif %}>来源顺序</option>
-            </select>
-          </div>
-        </div>
+        </section>
 
-        <div class="quick-grid">
-          <div class="row">
-            <label for="filter-include">保留名称（关键词或正则）</label>
-            <textarea id="filter-include" name="filter_include" rows="3" placeholder="每行一个条件；留空表示不限制">{{ profile.filter_include if profile else '' }}</textarea>
+        <section class="form-section">
+          <div class="form-section-head">
+            <h3>订阅来源</h3>
+            <div class="hint">勾选需要合并的订阅源，至少选择一个。</div>
           </div>
-          <div class="row">
-            <label for="filter-exclude">排除名称（关键词或正则）</label>
-            <textarea id="filter-exclude" name="filter_exclude" rows="3" placeholder="每行一个条件">{{ profile.filter_exclude if profile else '' }}</textarea>
-          </div>
-        </div>
 
-        <div class="quick-grid">
-          <div class="row">
-            <label for="rename-regex">重命名匹配正则</label>
-            <input id="rename-regex" name="rename_regex" value="{{ profile.rename_regex if profile else '' }}" placeholder="例如：^(香港)"/>
+          <div class="field">
+            {% if sources %}
+            <div class="source-picks">
+              {% for source in sources %}
+              <label class="source-pick">
+                <input type="checkbox" name="source_ids" value="{{ source.id }}" {% if profile and source.id in profile.source_ids %}checked{% endif %}/>
+                <span>{{ source.name }}</span>
+                <small>{{ source.kind }}</small>
+              </label>
+              {% endfor %}
+            </div>
+            {% else %}
+            <div class="state-block">
+              <div class="state-title">先新增至少一个订阅源</div>
+              <div class="hint">组合订阅需要至少一个来源才能合并输出。</div>
+              <div class="actions">
+                <a class="btn primary" href="{{ url_prefix }}/sources/new">去新增订阅源</a>
+              </div>
+            </div>
+            {% endif %}
           </div>
-          <div class="row">
-            <label for="rename-with">替换为</label>
-            <input id="rename-with" name="rename_with" value="{{ profile.rename_with if profile else '' }}" placeholder="支持分组引用，例如 \1"/>
-          </div>
-        </div>
+        </section>
 
-        <div class="quick-grid">
-          <div class="row">
-            <label for="clash-template">Clash 模板</label>
-            <select id="clash-template" name="clash_template">
-              <option value="default" {% if not profile or profile.clash_template != 'custom' %}selected{% endif %}>内置默认模板</option>
-              <option value="custom" {% if profile and profile.clash_template == 'custom' %}selected{% endif %}>自定义 YAML 模板</option>
-            </select>
+        <section class="form-section">
+          <div class="form-section-head">
+            <h3>节点筛选与排序</h3>
+            <div class="hint">按名称过滤节点，并决定最终输出顺序。</div>
           </div>
-          <div class="row">
-            <label for="rate-limit">限速（Mbps）</label>
-            <input id="rate-limit" name="rate_limit_mbps" type="number" min="0" max="10000" value="{{ profile.rate_limit_mbps if profile else 0 }}"/>
+
+          <div class="field-row">
+            <div class="field">
+              <label for="filter-mode">筛选方式</label>
+              <select id="filter-mode" name="filter_mode">
+                <option value="keyword" {% if not profile or profile.filter_mode == 'keyword' %}selected{% endif %}>名称关键词</option>
+                <option value="regex" {% if profile and profile.filter_mode == 'regex' %}selected{% endif %}>正则表达式</option>
+              </select>
+            </div>
+            <div class="field">
+              <label for="profile-sort">节点排序</label>
+              <select id="profile-sort" name="sort">
+                <option value="name" {% if not profile or profile.sort == 'name' %}selected{% endif %}>名称升序</option>
+                <option value="name_desc" {% if profile and profile.sort == 'name_desc' %}selected{% endif %}>名称降序</option>
+                <option value="protocol" {% if profile and profile.sort == 'protocol' %}selected{% endif %}>按协议</option>
+                <option value="source" {% if profile and profile.sort == 'source' %}selected{% endif %}>来源顺序</option>
+              </select>
+            </div>
           </div>
-        </div>
 
-        <div class="row" data-custom-template>
-          <label for="custom-template">Clash YAML 模板</label>
-          <textarea id="custom-template" name="custom_template" rows="12" class="mono" placeholder="rules:\n  - MATCH,选择代理节点\nproxy-groups:\n  - name: 选择代理节点\n    type: select\n    proxies:\n      - DIRECT">{{ profile.custom_template if profile else '' }}</textarea>
-        </div>
+          <div class="field-row">
+            <div class="field">
+              <label for="filter-include">保留名称（关键词或正则）</label>
+              <textarea id="filter-include" name="filter_include" rows="3" placeholder="每行一个条件；留空表示不限制">{{ profile.filter_include if profile else '' }}</textarea>
+              <div class="hint">命中任意一行即保留。</div>
+            </div>
+            <div class="field">
+              <label for="filter-exclude">排除名称（关键词或正则）</label>
+              <textarea id="filter-exclude" name="filter_exclude" rows="3" placeholder="每行一个条件">{{ profile.filter_exclude if profile else '' }}</textarea>
+              <div class="hint">命中任意一行即排除，优先级高于保留条件。</div>
+            </div>
+          </div>
 
-        <div class="row inline-option">
-          <label><input type="checkbox" name="dedupe" value="1" {% if not profile or profile.dedupe %}checked{% endif %}/> 合并重复节点（按连接参数判断）</label>
-        </div>
-        <div class="actions" style="margin-top:12px;">
-          <button class="btn" type="button" data-profile-preview>预览</button>
+          <div class="field-row">
+            <div class="field">
+              <label for="rename-regex">重命名匹配正则</label>
+              <input id="rename-regex" name="rename_regex" value="{{ profile.rename_regex if profile else '' }}" placeholder="例如：^(香港)"/>
+            </div>
+            <div class="field">
+              <label for="rename-with">替换为</label>
+              <input id="rename-with" name="rename_with" value="{{ profile.rename_with if profile else '' }}" placeholder="支持分组引用，例如 \1"/>
+            </div>
+          </div>
+        </section>
+
+        <section class="form-section">
+          <div class="form-section-head">
+            <h3>输出与模板</h3>
+            <div class="hint">决定 Clash 配置的模板来源与限速。</div>
+          </div>
+
+          <div class="field-row">
+            <div class="field">
+              <label for="clash-template">Clash 模板</label>
+              <select id="clash-template" name="clash_template">
+                <option value="default" {% if not profile or profile.clash_template != 'custom' %}selected{% endif %}>内置默认模板</option>
+                <option value="custom" {% if profile and profile.clash_template == 'custom' %}selected{% endif %}>自定义 YAML 模板</option>
+              </select>
+            </div>
+            <div class="field">
+              <label for="rate-limit">限速（Mbps）</label>
+              <input id="rate-limit" name="rate_limit_mbps" type="number" min="0" max="10000" value="{{ profile.rate_limit_mbps if profile else 0 }}"/>
+              <div class="hint">0 表示不限速。</div>
+            </div>
+          </div>
+
+          <div class="field" data-custom-template>
+            <label for="custom-template">Clash YAML 模板</label>
+            <textarea id="custom-template" name="custom_template" rows="12" class="mono" placeholder="rules:\n  - MATCH,选择代理节点\nproxy-groups:\n  - name: 选择代理节点\n    type: select\n    proxies:\n      - DIRECT">{{ profile.custom_template if profile else '' }}</textarea>
+          </div>
+        </section>
+
+        <section class="form-section">
+          <div class="field inline-option">
+            <label><input type="checkbox" name="dedupe" value="1" {% if not profile or profile.dedupe %}checked{% endif %}/> 合并重复节点（按连接参数判断）</label>
+          </div>
+        </section>
+
+        <div class="form-actions">
+          <button class="btn" type="button" data-profile-preview>预览结果</button>
           <button class="btn primary" type="submit">保存组合订阅</button>
           <a class="btn ghost" href="{{ url_prefix }}/">取消</a>
         </div>
-        <div class="state-block" data-preview-result hidden style="margin-top:12px;" aria-live="polite"></div>
+        <div class="state-block" data-preview-result hidden aria-live="polite"></div>
       </form>
     </div>
   </div>
   <div id="toast" class="toast" role="status" aria-live="polite"><div class="title">提示</div><div class="msg"></div></div>
-  <script src="{{ url_prefix }}/static/app.js"></script>
+  <script src="{{ url_prefix }}/static/app.js?v=ui-20261108b"></script>
   <script>
     (function () {
       var mode = document.getElementById("clash-template");
@@ -126,9 +168,21 @@
       update();
       var previewButton = document.querySelector("[data-profile-preview]");
       var result = document.querySelector("[data-preview-result]");
+      function showSkeleton() {
+        result.replaceChildren();
+        var stack = document.createElement("div");
+        stack.className = "skeleton-stack";
+        [["skeleton skeleton-line w-40"], ["skeleton skeleton-line w-75"], ["skeleton skeleton-line w-60"]].forEach(function (cls) {
+          var bar = document.createElement("div");
+          bar.className = cls[0];
+          stack.appendChild(bar);
+        });
+        result.appendChild(stack);
+      }
       previewButton.addEventListener("click", async function () {
         result.hidden = false;
-        result.textContent = "正在预览…";
+        result.className = "state-block";
+        showSkeleton();
         try {
           var response = await fetch("{{ url_prefix }}/profiles/preview", { method: "POST", body: new FormData(previewButton.form) });
           var data = await response.json();

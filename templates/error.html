@@ -1,49 +1,55 @@
 <!doctype html>
-<html lang="zh-CN">
+<html lang="zh-CN" data-theme="linear">
 <head>
   <meta charset="utf-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <title>请求失败 - SubConvert Manager</title>
-  <link rel="stylesheet" href="{{ url_prefix }}/static/style.css"/>
+  <script>(function(){var t="linear";try{t=localStorage.getItem("scm_theme")||t;}catch(e){}if(!/^(linear|vercel|supabase|stripe|notion|raycast|mintlify|warp|sentry|claude)$/.test(t))t="linear";document.documentElement.setAttribute("data-theme",t);}());</script>
+  <link rel="icon" type="image/svg+xml" href="{{ url_prefix }}/static/favicon.svg?v=ui-20261108b"/>
+  <link rel="stylesheet" href="{{ url_prefix }}/static/style.css?v=ui-20261108b"/>
 </head>
 <body>
-  <div class="wrap">
-    <div class="top">
-      <div class="brand">
+  <div class="auth-shell">
+    <div class="auth-card auth-card--wide">
+      <div class="auth-head auth-head--start">
+        <span class="brand-mark" aria-hidden="true">
+          <svg viewBox="0 0 24 24"><path d="M12 3.2 2.4 20.4h19.2L12 3.2Z"/><path d="M12 9.4v4.6"/><circle cx="12" cy="17.2" r=".8"/></svg>
+        </span>
         <h1>请求失败</h1>
         <div class="sub">状态码：{{ status_code }}</div>
       </div>
-      <div class="top-actions">
-        <button class="btn" type="button" data-density-toggle aria-label="切换页面密度"><span data-density-label>切换为紧凑</span></button>
-        <a class="btn" href="{{ url_prefix }}/">返回首页</a>
-        <a class="btn" href="{{ url_prefix }}/convert">前往转换页</a>
-      </div>
-    </div>
 
-    <div class="card state-block error">
-      <div class="state-title">错误详情</div>
-      <div style="font-weight:700;">{{ detail }}</div>
-      {% if status_code == 401 %}
-      <div class="hint">当前请求需要认证，请确认已登录或检查订阅 token 是否正确。</div>
-      {% endif %}
-      {% if status_code == 404 %}
-      <div class="hint">目标资源不存在，可能已被删除或 URL 输入错误。</div>
-      {% endif %}
-      {% if status_code >= 500 %}
-      <div class="hint">服务端异常，可稍后重试；若持续失败请检查服务日志。</div>
-      {% endif %}
-      <div class="actions" style="margin-top:8px;">
-        <button class="btn" type="button" onclick="window.location.reload();">重试</button>
+      <div class="notice error" role="alert">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.2 2.4 20.4h19.2L12 3.2Z"/><path d="M12 9.4v4.6"/><circle cx="12" cy="17.2" r=".8"/></svg>
+        <div class="notice-body">
+          <div class="notice-title">错误详情</div>
+          <div class="mono">{{ detail }}</div>
+          {% if status_code == 401 %}
+          <div>当前请求需要认证，请确认已登录或检查订阅 token 是否正确。</div>
+          {% endif %}
+          {% if status_code == 404 %}
+          <div>目标资源不存在，可能已被删除或 URL 输入错误。</div>
+          {% endif %}
+          {% if status_code >= 500 %}
+          <div>服务端异常，可稍后重试；若持续失败请检查服务日志。</div>
+          {% endif %}
+        </div>
+      </div>
+
+      <div class="actions auth-actions">
+        <button class="btn primary" type="button" onclick="window.location.reload();">重试</button>
         <button class="btn ghost" type="button" onclick="window.history.back();">返回上一页</button>
+        <a class="btn ghost" href="{{ url_prefix }}/">返回首页</a>
+        <a class="btn ghost" href="{{ url_prefix }}/convert">前往转换页</a>
       </div>
-    </div>
 
-    <div class="card">
-      <h3>常见原因</h3>
-      <div class="hint" style="margin-top:8px;">
-        1. 远程订阅地址不可访问、超时或内容格式不合法。<br/>
-        2. 上传 YAML 缺少 <span class="mono">proxies</span> 字段。<br/>
-        3. token、账号密码或请求参数不正确。
+      <div class="auth-foot">
+        <div class="auth-foot-title">常见原因</div>
+        <ol class="record-list record-list--ordered">
+          <li>远程订阅地址不可访问、超时或内容格式不合法。</li>
+          <li>上传 YAML 缺少 <span class="mono">proxies</span> 字段。</li>
+          <li>token、账号密码或请求参数不正确。</li>
+        </ol>
       </div>
     </div>
   </div>
@@ -53,6 +59,6 @@
     <div class="msg"></div>
   </div>
 
-  <script src="{{ url_prefix }}/static/app.js"></script>
+  <script src="{{ url_prefix }}/static/app.js?v=ui-20261108b"></script>
 </body>
 </html>
