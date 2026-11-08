@@ -2,10 +2,10 @@
 # SubConvert Manager 一键部署入口
 #
 # 用法（推荐）：
-#   bash <(curl -fsSL https://github.com/HlONGlin/subconvert-manager/raw/main/one-click.sh)
+#   bash <(curl -fsSL https://raw.githubusercontent.com/HlONGlin/subconvert-manager/main/one-click.sh)
 #
 # 也支持直接下载后执行：
-#   curl -fsSL https://github.com/HlONGlin/subconvert-manager/raw/main/one-click.sh -o one-click.sh
+#   curl -fsSL https://raw.githubusercontent.com/HlONGlin/subconvert-manager/main/one-click.sh -o one-click.sh
 #   sudo bash one-click.sh
 #
 # 非交互安装（适合自动化）：
@@ -115,7 +115,7 @@ script_dir() {
 
 require_root() {
   if [[ "${EUID:-$(id -u)}" -ne 0 ]]; then
-    die "请使用 root 运行。例如：curl -fsSL https://github.com/HlONGlin/subconvert-manager/raw/main/one-click.sh | sudo bash"
+    die "请使用 root 运行。例如：curl -fsSL https://raw.githubusercontent.com/HlONGlin/subconvert-manager/main/one-click.sh | sudo bash"
   fi
 }
 

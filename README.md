@@ -112,7 +112,7 @@ python -m unittest discover -s tests -v
 适用于支持 `systemd` / `openrc` / `sysv init` 的 Linux 服务器。脚本会自动检查运行环境、安装 Python 依赖、创建虚拟环境、写入配置、注册系统服务，并在首次安装时引导你设置管理员账号。
 
 ```bash
-bash <(curl -fsSL https://github.com/HlONGlin/subconvert-manager/raw/main/one-click.sh)
+bash <(curl -fsSL https://raw.githubusercontent.com/HlONGlin/subconvert-manager/main/one-click.sh)
 ```
 
 > 没有 `curl` 时，可用 `wget -qO- <同一地址> | sudo bash`；已经 clone 过仓库的，直接 `sudo bash one-click.sh` 即可。
@@ -174,7 +174,7 @@ bash <(curl -fsSL https://github.com/HlONGlin/subconvert-manager/raw/main/one-cl
 **自动化安装：**
 
 ```bash
-curl -fsSL https://github.com/HlONGlin/subconvert-manager/raw/main/one-click.sh -o one-click.sh
+curl -fsSL https://raw.githubusercontent.com/HlONGlin/subconvert-manager/main/one-click.sh -o one-click.sh
 sudo bash one-click.sh --install --yes --port 8000
 ```
 

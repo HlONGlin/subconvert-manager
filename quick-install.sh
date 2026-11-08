@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # 兼容入口：保留旧的一键命令，实际逻辑已迁移到 one-click.sh
 #
-#   bash <(curl -fsSL https://github.com/HlONGlin/subconvert-manager/raw/main/quick-install.sh)
+#   bash <(curl -fsSL https://raw.githubusercontent.com/HlONGlin/subconvert-manager/main/quick-install.sh)
 #
 # 旧的环境变量仍然可用：
 #   APP_DIR       安装目录（等价于 --dir）
