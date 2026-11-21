@@ -9,7 +9,8 @@ from converter import (
     split_v2ray_text, uris_to_v2ray_subscription_base64,
     v2ray_uris_to_clash_proxies,
 )
-from protocols import SUPPORTED_PROTOCOLS, YAML_ONLY_PROTOCOLS
+from protocols import SUPPORTED_PROTOCOLS, YAML_ONLY_PROTOCOLS, parse_uri
+from exporter import build_singbox_config
 
 
 KEY = base64.b64encode(bytes(range(32))).decode("ascii")
@@ -65,6 +66,54 @@ def fixtures():
 
 
 class TestProtocolRoundTrips(unittest.TestCase):
+    def test_vless_encryption_roundtrip_and_validation(self):
+        encryption = "mlkem768x25519plus.native.0rtt.wMs8E2YEfnJamAyxyLnB9eYI0PZ0opYIlV9KoI9lZRM"
+        uri = f"vless://{UUID}@example.com:443?encryption={encryption}&security=tls#node"
+        proxy = v2ray_uris_to_clash_proxies([uri])[0]
+        self.assertEqual(proxy["encryption"], encryption)
+        ok, exported = clash_proxy_to_uri(proxy)
+        self.assertTrue(ok, exported)
+        self.assertEqual(parse_uri(exported)[0]["encryption"], encryption)
+
+        empty = v2ray_uris_to_clash_proxies([f"vless://{UUID}@e.com:443?encryption=&security=tls#n"])[0]
+        self.assertNotIn("encryption", empty)
+        issues = []
+        result = v2ray_uris_to_clash_proxies(
+            [f"vless://{UUID}@e.com:443?encryption=mlkem768x25519plus.native.1rtt.AAAA#n"], issues)
+        self.assertEqual(result, [])
+        self.assertIn("encryption", issues[0]["reason"])
+
+    def test_vless_encryption_modes_key_sizes_and_warnings(self):
+        mlkem_key = base64.urlsafe_b64encode(bytes(1184)).decode("ascii").rstrip("=")
+        x25519_key = base64.urlsafe_b64encode(bytes(32)).decode("ascii").rstrip("=")
+        uri = f"vless://{UUID}@e.com:443?encryption=mlkem768x25519plus.xorpub.1rtt.{mlkem_key}&security=tls#n"
+        issues = []
+        proxy = v2ray_uris_to_clash_proxies([uri], issues)[0]
+        self.assertIn("xorpub.1rtt", proxy["encryption"])
+        self.assertEqual(issues, [])
+
+        x25519_uri = f"vless://{UUID}@e.com:443?encryption=mlkem768x25519plus.random.0rtt.{x25519_key}&security=tls#n"
+        issues = []
+        self.assertEqual(len(v2ray_uris_to_clash_proxies([x25519_uri], issues)), 1)
+        self.assertTrue(any(item["severity"] == "warning" and "ML-KEM" in item["reason"]
+                            for item in issues))
+
+    def test_reality_spiderx_is_reported_as_warning(self):
+        uri = (f"vless://{UUID}@e.com:443?security=reality&pbk=KEY&sid=ab"
+               "&sni=a.com&type=tcp&spx=%2Fx#r")
+        issues = []
+        self.assertEqual(len(v2ray_uris_to_clash_proxies([uri], issues)), 1)
+        self.assertTrue(any(item["severity"] == "warning" and "spx" in item["reason"]
+                            for item in issues))
+
+    def test_singbox_vless_encryption_and_packet_encoding(self):
+        proxy = {"name": "node", "type": "vless", "server": "example.com", "port": 443,
+                 "uuid": UUID, "encryption": "native-encryption", "packet-addr": True}
+        outbound = build_singbox_config([proxy])["outbounds"]
+        node = next(item for item in outbound if item.get("tag") == "node")
+        self.assertEqual(node["encryption"], "native-encryption")
+        self.assertEqual(node["packet_encoding"], "packet")
+
     def test_every_supported_protocol_preserves_connection_fields(self):
         nodes = fixtures()
         self.assertEqual(set(SUPPORTED_PROTOCOLS), {p["type"] for p in nodes})

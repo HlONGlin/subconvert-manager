@@ -1,3 +1,22 @@
+# v1.3.1 - Subscription Conversion Fixes
+
+## Highlights
+
+- Preserve and validate VLESS Encryption URI parameters, including supported appearance and RTT modes; report incomplete X25519-only keys.
+- Preserve VLESS Encryption and packet encoding when exporting sing-box configurations.
+- Support both `play` and `default` Clash templates and reject unsupported template names.
+- Forward upstream `Subscription-Userinfo` metadata through converted subscription responses.
+- Report unsupported Reality `spx` values instead of silently dropping them.
+- Make generated Clash configs safer by disabling LAN access by default, binding DNS to localhost, removing the private DoH resolver, and adding fake-IP filters.
+- Prefer a proxy node over `DIRECT` in generated proxy groups.
+
+## Verification
+
+- 99 unit tests pass in the Orca Linux container.
+- Three optional integration tests are skipped unless Mihomo and sing-box binaries are configured.
+
+---
+
 # v1.3.0
 
 ## Highlights

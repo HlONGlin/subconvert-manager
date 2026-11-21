@@ -1,5 +1,13 @@
 # 变更记录（Changelog）
 
+# v1.3.1 - 2026-11-21
+
+- Fix VLESS Encryption validation and warning diagnostics; preserve the field in sing-box exports.
+- Support the `default` Clash template consistently and reject unknown template values.
+- Forward upstream `Subscription-Userinfo` headers from subscription conversion endpoints.
+- Report dropped Reality `spx` values.
+- Harden generated Clash DNS defaults and avoid selecting `DIRECT` ahead of available nodes.
+
 ## v1.3.0 - 2026-11-08
 
 - [新增] `one-click.sh` 一键部署入口：交互菜单、首次安装引导设置管理员账号、`--update-only` / `--port` / `--suffix` / `--yes` 等参数。

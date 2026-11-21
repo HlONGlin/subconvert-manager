@@ -75,6 +75,11 @@ def build_singbox_config(proxies: List[Dict], bare: bool = False) -> Dict:
                 outbound["uuid"] = item.get("uuid")
                 if item.get("flow"):
                     outbound["flow"] = item["flow"]
+                outbound["encryption"] = str(item.get("encryption") or "none").strip() or "none"
+                if item.get("packet-addr"):
+                    outbound["packet_encoding"] = "packet"
+                elif item.get("xudp"):
+                    outbound["packet_encoding"] = "xudp"
             else:
                 outbound["password"] = item.get("password") or item.get("pass")
             _add_tls(outbound, item)
@@ -216,7 +221,7 @@ def build_custom_clash_template(proxies: List[Dict], template_text: str) -> Dict
     names = [str(item.get("name") or "") for item in proxies if item.get("name")]
     doc["proxies"] = proxies
     if not isinstance(doc.get("proxy-groups"), list) or not doc["proxy-groups"]:
-        doc["proxy-groups"] = [{"name": "选择代理节点", "type": "select", "proxies": ["DIRECT"] + names}]
+        doc["proxy-groups"] = [{"name": "选择代理节点", "type": "select", "proxies": names + ["DIRECT"]}]
     if not isinstance(doc.get("rules"), list) or not doc["rules"]:
         doc["rules"] = ["MATCH,选择代理节点"]
     return doc

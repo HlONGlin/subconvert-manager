@@ -95,6 +95,58 @@ class TestConversionRoutes(unittest.TestCase):
                                            headers={"accept": "application/json"})
                 self.assertEqual(response.status_code, 401)
 
+    def test_public_clash_rejects_unknown_template_for_v2ray_source(self):
+        src = {"kind": "v2ray_text", "value": "anytls://secret@example.com#one"}
+        with patch.object(appmod, "_source_or_404", return_value=src), patch.object(appmod, "SUB_TOKEN", "test-token"):
+            response = self.client.get("/pub/s/test/clash?token=test-token&template=bogus")
+        self.assertEqual(response.status_code, 400)
+
+    def test_public_clash_supports_default_template(self):
+        src = {"kind": "v2ray_text", "value": "anytls://secret@example.com#one"}
+        with patch.object(appmod, "_source_or_404", return_value=src), patch.object(appmod, "SUB_TOKEN", "test-token"):
+            response = self.client.get("/pub/s/test/clash?token=test-token&template=default")
+        self.assertEqual(response.status_code, 200, response.text)
+        doc = yaml.safe_load(response.text)
+        self.assertNotIn("dns", doc)
+        self.assertEqual(doc["proxy-groups"][0]["proxies"][0], "one")
+
+    def test_subscription_userinfo_is_forwarded_to_conversion_response(self):
+        native = yaml.safe_dump({"proxies": [
+            {"name": "ss", "type": "ss", "server": "example.com", "port": 443,
+             "cipher": "aes-128-gcm", "password": "secret"},
+        ]})
+        src = {"kind": "clash_url", "value": "https://example.com/sub"}
+        userinfo = "upload=10; download=20; total=100; expire=1900000000"
+
+        def fetch(_url, metadata=None, **_kwargs):
+            if metadata is not None:
+                metadata["subscription_userinfo"] = userinfo
+            return native
+
+        with patch.object(appmod, "_source_or_404", return_value=src), \
+                patch.object(appmod, "_fetch_text", side_effect=fetch), \
+                patch.object(appmod, "SUB_TOKEN", "test-token"):
+            for path in ("/s/test/clash", "/pub/s/test/clash?token=test-token"):
+                response = self.client.get(path)
+                self.assertEqual(response.status_code, 200, response.text)
+                self.assertEqual(response.headers["Subscription-Userinfo"], userinfo)
+
+    def test_web_conversion_supports_default_template(self):
+        response = self.client.post("/convert/v2ray_to_clash", data={
+            "text": "anytls://secret@example.com#one",
+            "template": "default",
+        })
+        self.assertEqual(response.status_code, 200, response.text)
+        self.assertIn("socks-port: 7891", response.text)
+
+    def test_generated_clash_defaults_to_node(self):
+        src = {"kind": "v2ray_text", "value": "anytls://secret@example.com#one"}
+        with patch.object(appmod, "_source_or_404", return_value=src):
+            response = self.client.get("/s/test/clash")
+        self.assertEqual(response.status_code, 200, response.text)
+        group = yaml.safe_load(response.text)["proxy-groups"][0]
+        self.assertEqual(group["proxies"][0], "one")
+
     def test_optional_yaml_fields_expose_warning_count(self):
         nodes = [dict(fixtures()[0], **{"tfo": True})]
         src = {"kind": "clash_yaml", "value": yaml.safe_dump({"proxies": nodes})}

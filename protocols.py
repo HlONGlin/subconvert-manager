@@ -79,6 +79,37 @@ def _first(query, *keys, default=None):
     return default
 
 
+def _validate_vless_encryption(value):
+    value = (value or "").strip()
+    if value in ("", "none"):
+        return "none", None
+    parts = value.split(".")
+    if len(parts) < 4 or parts[0] != "mlkem768x25519plus":
+        raise ProtocolError("unsupported VLESS encryption suite")
+    if parts[1] not in ("native", "xorpub", "random"):
+        raise ProtocolError("unsupported VLESS encryption appearance")
+    if parts[2] not in ("0rtt", "1rtt"):
+        raise ProtocolError("invalid VLESS encryption RTT mode")
+
+    key_sizes = []
+    for segment in parts[3:]:
+        if len(segment) < 20:
+            continue
+        try:
+            raw = base64.b64decode(
+                segment + "=" * (-len(segment) % 4), altchars=b"-_", validate=True)
+        except (ValueError, binascii.Error) as exc:
+            raise ProtocolError("invalid VLESS encryption key encoding") from exc
+        if len(raw) not in (32, 1184):
+            raise ProtocolError("VLESS encryption key must be 32 or 1184 bytes")
+        key_sizes.append(len(raw))
+    if not key_sizes:
+        raise ProtocolError("VLESS encryption requires at least one key")
+    warning = None if 1184 in key_sizes else (
+        "VLESS encryption carries only an X25519 key (no ML-KEM-768 half)")
+    return value, warning
+
+
 def _required(proxy, key):
     value = proxy.get(key)
     if value is None or value == "":
@@ -455,8 +486,9 @@ def _parse_vmess(uri):
     return [proxy]
 
 
-def _parse_url(uri, kind):
+def _parse_url(uri, kind, issues=None, index=0):
     proxy, parsed, query = _base(uri, kind)
+    warnings = []
     username = unquote(parsed.username or "")
     password = unquote(parsed.password or "")
     if kind in ("vmess", "vless"):
@@ -467,9 +499,12 @@ def _parse_url(uri, kind):
         if kind == "vmess":
             proxy.update({"alterId": 0, "cipher": _first(query, "encryption", default="auto")})
         else:
-            encryption = _first(query, "encryption", default="none")
+            encryption, warning = _validate_vless_encryption(
+                _first(query, "encryption", default="none"))
             if encryption != "none":
                 proxy["encryption"] = encryption
+            if warning:
+                warnings.append(warning)
             if "flow" in query:
                 proxy["flow"] = query["flow"][0]
         _transport_in(proxy, query)
@@ -589,6 +624,8 @@ def _parse_url(uri, kind):
             proxies.append(item)
         return proxies
     _tls_in(proxy, query)
+    if kind == "vless" and "spx" in query and query["spx"][0].strip("/"):
+        warnings.append("share link field spx has no Mihomo equivalent")
     if kind == "hysteria2":
         for key in ("obfs", "obfs-password", "up", "down", "hop-interval"):
             if key in query:
@@ -598,10 +635,12 @@ def _parse_url(uri, kind):
             proxy["ports"] = _port_ranges(ports.replace(":", "-"))
     if "udp" in query:
         proxy["udp"] = _bool(query["udp"][0])
+    for warning in warnings:
+        _issue(issues, index, kind, warning, severity="warning")
     return [proxy]
 
 
-def parse_uri(uri):
+def parse_uri(uri, issues=None, index=0):
     if not isinstance(uri, str) or "://" not in uri:
         raise ProtocolError("expected a proxy share URI")
     uri = uri.strip()
@@ -619,7 +658,7 @@ def parse_uri(uri):
         return _parse_ssr(normalized)
     if kind == "vmess":
         return _parse_vmess(normalized)
-    return _parse_url(normalized, kind)
+    return _parse_url(normalized, kind, issues=issues, index=index)
 
 
 def export_uri(proxy):
@@ -851,7 +890,7 @@ def v2ray_uris_to_clash_proxies(uris: List[str], issues: Optional[List[Dict]] = 
         scheme = str(uri).split("://", 1)[0].lower()
         safe_scheme = scheme if re.fullmatch(r"[a-z][a-z0-9+.-]{0,31}", scheme) else "unknown"
         try:
-            result.extend(parse_uri(uri))
+            result.extend(parse_uri(uri, issues=issues, index=index))
         except ProtocolError as exc:
             _issue(issues, index, safe_scheme, str(exc))
         except (ValueError, TypeError, KeyError, AttributeError, OverflowError, RecursionError):

@@ -45,6 +45,18 @@ class TestConverter(unittest.TestCase):
         doc = build_clash_yaml([])
         self.assertIn("proxy-groups", doc)
         self.assertIn("rules", doc)
+        self.assertFalse(doc["allow-lan"])
+
+    def test_clashplay_dns_is_local_private_and_fake_ip_filtered(self):
+        doc = build_clashplay_yaml([
+            {"name": "node", "type": "anytls", "server": "example.com", "port": 443,
+             "password": "secret"},
+        ])
+        self.assertFalse(doc["allow-lan"])
+        self.assertEqual(doc["dns"]["listen"], "127.0.0.1:1053")
+        self.assertIn("*.lan", doc["dns"]["fake-ip-filter"])
+        self.assertIn("+.stun.*.*", doc["dns"]["fake-ip-filter"])
+        self.assertFalse(any("lehu.in" in url for url in doc["dns"]["fallback"]))
 
     def test_build_clashplay_yaml_groups(self):
         proxies = [
@@ -58,7 +70,7 @@ class TestConverter(unittest.TestCase):
         self.assertEqual(groups[0].get("type"), "select")
         self.assertNotIn("load-balance", [g.get("type") for g in groups])
         self.assertNotIn("url-test", [g.get("type") for g in groups])
-        self.assertEqual(groups[0].get("proxies"), ["DIRECT", "HK-1", "HK-2", "JP-1"])
+        self.assertEqual(groups[0].get("proxies"), ["HK-1", "HK-2", "JP-1", "DIRECT"])
         self.assertIn("rate-limit", doc)
 
     def test_parse_vless_reality_to_clash(self):

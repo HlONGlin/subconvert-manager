@@ -54,14 +54,15 @@ def build_clash_yaml(proxies: List[Dict]) -> Dict:
     group = {
         "name": "🌍选择代理节点",
         "type": "select",
-        "proxies": ["DIRECT"] + names,
+        "proxies": names + ["DIRECT"],
     }
     return {
         "port": 7890,
         "socks-port": 7891,
-        "allow-lan": True,
+        "allow-lan": False,
         "mode": "rule",
         "log-level": "info",
+        "global-client-fingerprint": "chrome",
         "proxies": proxies,
         "proxy-groups": [group],
         "rules": ["MATCH,🌍选择代理节点"],
@@ -144,7 +145,7 @@ def build_clashplay_yaml(
     proxy_groups = [{
         'name': '🌍选择代理节点',
         'type': 'select',
-        'proxies': ['DIRECT'] + all_proxy_names,
+        'proxies': all_proxy_names + ['DIRECT'],
     }]
 
     rules = [
@@ -354,17 +355,20 @@ def build_clashplay_yaml(
     ]
     doc: Dict = {
         'port': 7890,
-        'allow-lan': True,
+        'allow-lan': False,
         'mode': 'rule',
         'log-level': 'info',
         'unified-delay': True,
         'global-client-fingerprint': 'chrome',
         'dns': {
             'enable': True,
-            'listen': ':53',
+            'listen': '127.0.0.1:1053',
             'ipv6': True,
             'enhanced-mode': 'fake-ip',
             'fake-ip-range': '198.18.0.1/16',
+            'fake-ip-filter': [
+                '*.lan', '*.local', 'localhost.ptlogin2.qq.com', '+.stun.*.*',
+            ],
             'default-nameserver': ['223.5.5.5', '8.8.8.8'],
             'nameserver': [
                 'https://dns.alidns.com/dns-query',
@@ -374,7 +378,6 @@ def build_clashplay_yaml(
             'fallback': [
                 'https://doh.360.cn/dns-query',
                 'https://dns.alidns.com/dns-query',
-                'https://zns.lehu.in/dns/vmKXrTy_U4n06Ff1PD_YxQ',
             ],
             'fallback-filter': {
                 'geoip': True,

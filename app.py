@@ -25,6 +25,7 @@ from starlette.middleware.sessions import SessionMiddleware
 from exporter import build_custom_clash_template, build_singbox_config, is_singbox_supported
 from processor import process_proxies
 from converter import (
+    build_clash_yaml,
     build_clashplay_yaml,
     clash_yaml_to_v2ray_uris,
     split_v2ray_text,
@@ -109,7 +110,7 @@ def _normalize_token(token: Optional[str]) -> str:
 
 def _normalize_clash_template(template: Optional[str]) -> str:
     template = (template or "play").strip().lower()
-    if template != "play":
+    if template not in ("play", "default"):
         raise HTTPException(status_code=400, detail="Unsupported Clash template")
     return template
 
@@ -726,14 +727,17 @@ def _conversion_failure(issues: List[dict]) -> HTTPException:
     )
 
 
-def _conversion_response(body: str, issues: List[dict]) -> PlainTextResponse:
+def _conversion_response(body: str, issues: List[dict], userinfo: str = "") -> PlainTextResponse:
     skipped = sum(item["severity"] == "error" for item in issues)
     warnings = sum(item["severity"] == "warning" for item in issues)
-    return PlainTextResponse(body, headers={
+    headers = {
         "X-Conversion-Skipped": str(skipped),
         "X-Conversion-Warnings": str(warnings),
         "Cache-Control": "no-store",
-    })
+    }
+    if userinfo:
+        headers["Subscription-Userinfo"] = userinfo
+    return PlainTextResponse(body, headers=headers)
 
 
 def _record_source_result(
@@ -786,10 +790,11 @@ def _record_source_result(
 
 
 def _checked_source_proxies(
-    src: dict, issues: Optional[List[dict]] = None, force: bool = False
+    src: dict, issues: Optional[List[dict]] = None, force: bool = False,
+    metadata: Optional[Dict[str, str]] = None,
 ) -> List[dict]:
     sid = str((src or {}).get("id") or "")
-    metadata: Dict[str, str] = {}
+    metadata = metadata if metadata is not None else {}
     try:
         nodes = _source_proxies(src, issues, metadata, force_refresh=force)
         if sid:
@@ -870,7 +875,9 @@ def _profile_response(profile: dict, fmt: str, issues: List[dict], mode: str = "
     return response
 
 
-def _singbox_response(nodes: List[dict], issues: List[dict], mode: str = "") -> Response:
+def _singbox_response(
+    nodes: List[dict], issues: List[dict], mode: str = "", userinfo: str = ""
+) -> Response:
     prepared = process_proxies(nodes, dedupe=False, sort="source")
     supported = [item for item in prepared if is_singbox_supported(item)]
     if not supported:
@@ -882,6 +889,8 @@ def _singbox_response(nodes: List[dict], issues: List[dict], mode: str = "") -> 
     response.headers["X-Output-Skipped"] = str(len(nodes) - len(supported))
     response.headers["X-Conversion-Skipped"] = str(sum(item.get("severity") == "error" for item in issues))
     response.headers["X-Conversion-Warnings"] = str(sum(item.get("severity") == "warning" for item in issues))
+    if userinfo:
+        response.headers["Subscription-Userinfo"] = userinfo
     return response
 
 
@@ -1415,7 +1424,7 @@ async def v2ray_to_clash_web(
     out = (out or "yaml").strip().lower()
     if out != "yaml":
         raise HTTPException(status_code=400, detail="Unsupported output format")
-    _normalize_clash_template(template)
+    template = _normalize_clash_template(template)
 
     rate_limit = _safe_int(rate_limit_mbps, 0)
     if rate_limit < 0 or rate_limit > 10000:
@@ -1427,7 +1436,10 @@ async def v2ray_to_clash_web(
     if not proxies:
         raise _conversion_failure(issues)
 
-    doc = build_clashplay_yaml(proxies, rate_limit_mbps=rate_limit)
+    if template == "default":
+        doc = build_clash_yaml(proxies)
+    else:
+        doc = build_clashplay_yaml(proxies, rate_limit_mbps=rate_limit)
 
     y = yaml.safe_dump(doc, allow_unicode=True, sort_keys=False)
     return templates.TemplateResponse(
@@ -1573,7 +1585,7 @@ def _resolve_to_uris(src: dict, issues: Optional[List[dict]] = None) -> List[str
 def _resolve_to_clash_yaml(src: dict, template: str = "", issues: Optional[List[dict]] = None) -> str:
     kind = (src or {}).get("kind")
     value = (src or {}).get("value") or ""
-    _normalize_clash_template(template)
+    template = _normalize_clash_template(template)
 
     if kind in ("clash_url", "clash_yaml"):
         if kind == "clash_url":
@@ -1584,7 +1596,10 @@ def _resolve_to_clash_yaml(src: dict, template: str = "", issues: Optional[List[
     proxies = v2ray_uris_to_clash_proxies(uris, issues=issues)
     if not proxies:
         raise _conversion_failure(issues or [])
-    doc = build_clashplay_yaml(proxies, rate_limit_mbps=_safe_int((src or {}).get("rate_limit_mbps"), 0))
+    if template == "default":
+        doc = build_clash_yaml(proxies)
+    else:
+        doc = build_clashplay_yaml(proxies, rate_limit_mbps=_safe_int((src or {}).get("rate_limit_mbps"), 0))
     return yaml.safe_dump(doc, allow_unicode=True, sort_keys=False)
 
 
@@ -1608,42 +1623,53 @@ def _source_or_404(sid: str) -> dict:
 def sub_v2ray_b64(sid: str, _=Depends(require_admin_auth)):
     issues: List[dict] = []
     src = _source_or_404(sid)
-    nodes = _checked_source_proxies(src, issues)
+    metadata: Dict[str, str] = {}
+    nodes = _checked_source_proxies(src, issues, metadata=metadata)
     uris = _source_uris(src, nodes, issues)
     if not uris:
         raise _conversion_failure(issues)
-    return _conversion_response(uris_to_v2ray_subscription_base64(uris), issues)
+    return _conversion_response(uris_to_v2ray_subscription_base64(uris), issues,
+                                metadata.get("subscription_userinfo", ""))
 
 
 @app.get("/s/{sid}/v2ray_raw", response_class=PlainTextResponse)
 def sub_v2ray_raw(sid: str, _=Depends(require_admin_auth)):
     issues: List[dict] = []
     src = _source_or_404(sid)
-    nodes = _checked_source_proxies(src, issues)
+    metadata: Dict[str, str] = {}
+    nodes = _checked_source_proxies(src, issues, metadata=metadata)
     uris = _source_uris(src, nodes, issues)
     if not uris:
         raise _conversion_failure(issues)
-    return _conversion_response("\n".join(uris) + "\n", issues)
+    return _conversion_response("\n".join(uris) + "\n", issues,
+                                metadata.get("subscription_userinfo", ""))
 
 
 @app.get("/s/{sid}/clash", response_class=PlainTextResponse)
 def sub_clash(sid: str, template: str = "", _=Depends(require_admin_auth)):
     issues: List[dict] = []
+    metadata: Dict[str, str] = {}
     src = _source_or_404(sid)
-    nodes = _checked_source_proxies(src, issues)
+    nodes = _checked_source_proxies(src, issues, metadata=metadata)
     if src.get("kind") == "v2ray_text":
-        doc = build_clashplay_yaml(nodes, rate_limit_mbps=_safe_int(src.get("rate_limit_mbps"), 0))
+        template = _normalize_clash_template(template)
+        if template == "default":
+            doc = build_clash_yaml(nodes)
+        else:
+            doc = build_clashplay_yaml(nodes, rate_limit_mbps=_safe_int(src.get("rate_limit_mbps"), 0))
         y = yaml.safe_dump(doc, allow_unicode=True, sort_keys=False)
     else:
         y = _resolve_to_clash_yaml(src, template=template, issues=issues)
-    return _conversion_response(y if y.endswith("\n") else y + "\n", issues)
+    return _conversion_response(y if y.endswith("\n") else y + "\n", issues,
+                                metadata.get("subscription_userinfo", ""))
 
 
 @app.get("/s/{sid}/singbox")
 def sub_singbox(sid: str, mode: str = "", _=Depends(require_admin_auth)):
     issues: List[dict] = []
-    nodes = _checked_source_proxies(_source_or_404(sid), issues)
-    return _singbox_response(nodes, issues, mode)
+    metadata: Dict[str, str] = {}
+    nodes = _checked_source_proxies(_source_or_404(sid), issues, metadata=metadata)
+    return _singbox_response(nodes, issues, mode, metadata.get("subscription_userinfo", ""))
 
 
 @app.get("/pub/s/{sid}/v2ray", response_class=PlainTextResponse)
@@ -1651,11 +1677,13 @@ def pub_v2ray_b64(sid: str, token: str = ""):
     require_resource_token(token, "source", sid)
     issues: List[dict] = []
     src = _source_or_404(sid)
-    nodes = _checked_source_proxies(src, issues)
+    metadata: Dict[str, str] = {}
+    nodes = _checked_source_proxies(src, issues, metadata=metadata)
     uris = _source_uris(src, nodes, issues)
     if not uris:
         raise _conversion_failure(issues)
-    return _conversion_response(uris_to_v2ray_subscription_base64(uris), issues)
+    return _conversion_response(uris_to_v2ray_subscription_base64(uris), issues,
+                                metadata.get("subscription_userinfo", ""))
 
 
 @app.get("/pub/s/{sid}/v2ray_raw", response_class=PlainTextResponse)
@@ -1663,11 +1691,13 @@ def pub_v2ray_raw(sid: str, token: str = ""):
     require_resource_token(token, "source", sid)
     issues: List[dict] = []
     src = _source_or_404(sid)
-    nodes = _checked_source_proxies(src, issues)
+    metadata: Dict[str, str] = {}
+    nodes = _checked_source_proxies(src, issues, metadata=metadata)
     uris = _source_uris(src, nodes, issues)
     if not uris:
         raise _conversion_failure(issues)
-    return _conversion_response("\n".join(uris) + "\n", issues)
+    return _conversion_response("\n".join(uris) + "\n", issues,
+                                metadata.get("subscription_userinfo", ""))
 
 
 @app.get("/pub/s/{sid}/clash", response_class=PlainTextResponse)
@@ -1675,21 +1705,28 @@ def pub_clash(sid: str, token: str = "", template: str = ""):
     require_resource_token(token, "source", sid)
     issues: List[dict] = []
     src = _source_or_404(sid)
-    nodes = _checked_source_proxies(src, issues)
+    metadata: Dict[str, str] = {}
+    nodes = _checked_source_proxies(src, issues, metadata=metadata)
     if src.get("kind") == "v2ray_text":
-        doc = build_clashplay_yaml(nodes, rate_limit_mbps=_safe_int(src.get("rate_limit_mbps"), 0))
+        template = _normalize_clash_template(template)
+        if template == "default":
+            doc = build_clash_yaml(nodes)
+        else:
+            doc = build_clashplay_yaml(nodes, rate_limit_mbps=_safe_int(src.get("rate_limit_mbps"), 0))
         y = yaml.safe_dump(doc, allow_unicode=True, sort_keys=False)
     else:
         y = _resolve_to_clash_yaml(src, template=template, issues=issues)
-    return _conversion_response(y if y.endswith("\n") else y + "\n", issues)
+    return _conversion_response(y if y.endswith("\n") else y + "\n", issues,
+                                metadata.get("subscription_userinfo", ""))
 
 
 @app.get("/pub/s/{sid}/singbox")
 def pub_singbox(sid: str, token: str = "", mode: str = ""):
     require_resource_token(token, "source", sid)
     issues: List[dict] = []
-    nodes = _checked_source_proxies(_source_or_404(sid), issues)
-    return _singbox_response(nodes, issues, mode)
+    metadata: Dict[str, str] = {}
+    nodes = _checked_source_proxies(_source_or_404(sid), issues, metadata=metadata)
+    return _singbox_response(nodes, issues, mode, metadata.get("subscription_userinfo", ""))
 
 
 @app.get("/p/{pid}/clash", response_class=PlainTextResponse)
